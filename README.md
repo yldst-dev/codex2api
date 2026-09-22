@@ -17,19 +17,27 @@ OAuth 상수와 토큰 교환, 기본 instructions 문구는 [sub2api](https://g
 
 ## 설치
 
-Go 1.24 이상이 필요합니다.
+릴리스 파일을 받는 방법이 가장 짧습니다. Linux amd64, Linux arm64, macOS amd64, macOS arm64 실행 파일이 [릴리스](https://github.com/yldst-dev/codex2api/releases/latest)에 있습니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yldst-dev/codex2api/main/scripts/install-release.sh | sudo sh
+```
+
+이 명령은 이 기기에 맞는 최신 파일을 받아 SHA256SUMS로 확인한 뒤 `/usr/local/bin/codex-gateway`에 넣습니다. root가 아니면 `$HOME/.local/bin`에 넣습니다.
+
+Ubuntu에서 계정, 데이터 디렉터리, systemd 서비스까지 만들려면 다음을 씁니다.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yldst-dev/codex2api/main/scripts/install-release.sh | sudo sh -s -- --service
+```
+
+소스에서 직접 빌드할 때는 Go 1.24 이상이 필요합니다.
 
 ```bash
 git clone https://github.com/yldst-dev/codex2api.git
 cd codex2api
 CGO_ENABLED=0 go build -o codex-gateway ./cmd/codex-gateway
 sudo install -m 0755 codex-gateway /usr/local/bin/codex-gateway
-```
-
-Linux amd64 바이너리만 서버에 올릴 때는 빌드 머신에서 다음을 실행합니다.
-
-```bash
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o codex-gateway ./cmd/codex-gateway
 ```
 
 ## Ubuntu 설치 예시

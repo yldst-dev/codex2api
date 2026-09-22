@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -trimpath -ldflags "-s -w" \
+            -o "codex-gateway-${GOOS}-${GOARCH}" ./cmd/codex-gateway
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codex-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: codex-gateway-${{ matrix.goos }}-${{ matrix.goarch }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd dist
+          chmod 0755 codex-gateway-*
+          sha256sum codex-gateway-* > SHA256SUMS
+          tag="${GITHUB_REF_NAME}"
+          notes=$(mktemp)
+          cat > "$notes" << 'EOF'
+          Linux와 macOS용 실행 파일입니다.
+
+          최신 릴리스를 받아 설치합니다.
+
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/yldst-dev/codex2api/main/scripts/install-release.sh | sudo sh
+          ```
+
+          Ubuntu 서비스까지 등록합니다.
+
+          ```bash
+          curl -fsSL https://raw.githubusercontent.com/yldst-dev/codex2api/main/scripts/install-release.sh | sudo sh -s -- --service
+          ```
+
+          받은 파일은 SHA256SUMS로 확인할 수 있습니다. 이 버전 번호는 Codex 클라이언트 버전과 별개입니다.
+          EOF
+          gh release create "$tag" \
+            codex-gateway-* SHA256SUMS \
+            --title "$tag" \
+            --notes-file "$notes"
