@@ -1,0 +1,40 @@
+codex-gateway
+Copyright (C) 2026 codex-gateway contributors
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+The Codex OAuth protocol constants, PKCE construction, token exchange form,
+ID token claim extraction, and the default Codex instructions text are
+derived from sub2api:
+
+  https://github.com/Wei-Shaw/sub2api
+  commit 20a94fbb567b62208751292ed7786b24a7e7c0fe
+  Copyright (C) Wei-Shaw and sub2api contributors
+  License: GNU Lesser General Public License v3.0
+
+Derived files and behavior:
+
+  internal/oauth/oauth.go
+    backend/internal/pkg/openai/oauth.go
+    backend/internal/repository/openai_oauth_service.go
+    backend/internal/service/openai_oauth_service.go
+
+  internal/oauth/oauth.go identity constants
+    backend/internal/service/openai_gateway_service.go
+    backend/internal/service/openai_codex_identity.go
+
+  internal/gateway/instructions.txt
+    backend/internal/pkg/openai/instructions.txt
+
+  Upstream request shape for ChatGPT Codex OAuth accounts
+    backend/internal/service/openai_gateway_forward.go
+    backend/internal/service/openai_chatgpt_headers.go
+    backend/internal/service/openai_codex_models_service.go
+    backend/internal/service/openai_compact_body_signal.go
+
+The public OAuth client identifier app_EMoamEEZ73f0CkXaXp7hrann is the value
+sub2api documents as the official Codex CLI public client. This program does
+not add a client secret. sub2api's token request does not send one.

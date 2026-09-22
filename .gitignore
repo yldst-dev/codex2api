@@ -1,0 +1,16 @@
+/data/
+.env
+.env.*
+!.env.example
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+master.key
+refresh.lock
+/codex-gateway
+/dist/
+.DS_Store
+coverage.out
+__pycache__/
+*.pyc
