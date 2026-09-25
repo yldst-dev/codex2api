@@ -67,14 +67,25 @@ func (r *Runner) Shutdown(ctx context.Context) error {
 	if srv == nil {
 		return nil
 	}
-	return srv.Shutdown(ctx)
+	if err := srv.Shutdown(ctx); err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
+			return err
+		}
+		r.logger().Warn("closing connections still open after shutdown timeout")
+		_ = srv.Close()
+	}
+	return nil
+}
+
+func (r *Runner) logger() *slog.Logger {
+	if r.Log != nil {
+		return r.Log
+	}
+	return slog.Default()
 }
 
 func (r *Runner) serve(ln net.Listener, addr string) {
-	log := r.Log
-	if log == nil {
-		log = slog.Default()
-	}
+	log := r.logger()
 	srv := &http.Server{
 		Handler:           r.Handler,
 		ReadHeaderTimeout: 10 * time.Second,

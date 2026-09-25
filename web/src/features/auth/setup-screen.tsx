@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -14,7 +14,13 @@ function readSetupToken(): string {
 }
 
 export function SetupScreen({ onDone }: { onDone: () => Promise<void> }) {
-  const [token] = useState(readSetupToken)
+  const [token, setSetupToken] = useState(readSetupToken)
+
+  useEffect(() => {
+    const sync = () => setSetupToken(readSetupToken())
+    window.addEventListener("hashchange", sync)
+    return () => window.removeEventListener("hashchange", sync)
+  }, [])
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [error, setError] = useState<string | null>(null)
