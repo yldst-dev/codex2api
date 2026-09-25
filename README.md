@@ -4,12 +4,13 @@ Ubuntu 서버에서 OpenAI Codex OAuth 로그인을 끝낸 뒤, 그 자격 증�
 
 설치 스크립트를 한 번 실행한 뒤에는 브라우저 관리 화면에서 Codex 로그인, API 키 발급, 수신 주소 변경까지 모두 할 수 있습니다. 바꾼 값은 재시작 없이 바로 적용됩니다. 터미널이 편하면 인자 없이 `codex-gateway`를 실행해 방향키 메뉴를 써도 되고, 스크립트에서는 아래 하위 명령을 그대로 씁니다.
 
-하는 일은 네 가지입니다.
+하는 일은 다음과 같습니다.
 
 - Codex OAuth 로그인
 - access token 자동 갱신
 - Gateway API Key 발급과 폐기
 - Codex Responses API 프록시
+- 위 설정을 모두 하는 브라우저 관리 화면
 
 회원가입, 결제, 그룹, Redis, PostgreSQL은 없습니다. 저장소는 SQLite 하나입니다.
 
@@ -100,12 +101,14 @@ sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-ga
 
 | 환경 변수 | 기본값 | 의미 |
 | --- | --- | --- |
-| `CODEX_GATEWAY_LISTEN` | `127.0.0.1:8080` | 수신 주소. 외부 공개는 이 값을 직접 바꿀 때만 됩니다. |
+| `CODEX_GATEWAY_LISTEN` | `127.0.0.1:8080` | 수신 주소. 값을 넣으면 관리 화면과 저장한 값보다 우선하고, 관리 화면에서 바꿀 수 없게 됩니다. |
 | `CODEX_GATEWAY_DATA_DIR` | `./data` | SQLite와 마스터 키 위치 |
 | `CODEX_GATEWAY_MASTER_KEY` | 없음 | 32바이트 키. hex 64자 또는 base64 |
 | `CODEX_GATEWAY_ADMIN_LISTEN` | `127.0.0.1:8081` | 관리 화면 주소. 루프백만 됩니다. `off`면 끕니다. |
 
-마스터 키 우선순위는 환경 변수, 그다음 `CODEX_GATEWAY_DATA_DIR/master.key` 입니다. 둘 다 없으면 첫 실행에서 `master.key`를 만들고 권한을 `0600`으로 둡니다. 이 파일이 없으면 DB 안의 OAuth 토큰을 풀 수 없습니다.
+마스터 키 우선순위는 환경 변수, 그다음 `CODEX_GATEWAY_DATA_DIR/master.key` 입니다. 둘 다 없고 `gateway.db`도 없는 첫 실행에서만 `master.key`를 만들고 권한을 `0600`으로 둡니다. 이 파일이 없으면 DB 안의 OAuth 토큰을 풀 수 없습니다.
+
+`gateway.db`가 이미 있는데 `master.key`가 없으면 새 키를 만들지 않고 오류로 멈춥니다. DB에는 마스터 키 확인값이 들어 있어서, 다른 키로 열면 `master key does not match this data directory` 오류가 납니다. 서비스와 CLI가 같은 마스터 키를 써야 합니다. 마스터 키를 `/etc/codex-gateway.env`에 넣었다면 CLI를 실행할 때도 그 값을 함께 넘깁니다.
 
 systemd를 쓸 때는 `/etc/codex-gateway.env`에 넣습니다. 예시는 `deploy/codex-gateway.env.example` 입니다.
 
@@ -115,9 +118,11 @@ openssl rand -base64 32
 
 출력값을 `CODEX_GATEWAY_MASTER_KEY`에 넣거나, `master.key` 파일에 한 줄로 저장합니다.
 
-수신 주소는 관리 화면에서 바꾸면 바로 적용됩니다. `codex-gateway config set listen 127.0.0.1:8080`은 데이터 디렉터리에 값만 저장하므로 이미 떠 있는 서버에는 재시작 후 적용됩니다. `CODEX_GATEWAY_LISTEN` 환경 변수가 있으면 그 값이 우선하고, 관리 화면에서도 바꿀 수 없습니다. 기본 systemd 파일은 이 변수를 넣지 않습니다.
+수신 주소는 관리 화면에서 바꾸면 바로 적용됩니다. `codex-gateway config set listen 127.0.0.1:8080`은 데이터 디렉터리에 값만 저장하므로 이미 떠 있는 서버에는 재시작 후 적용됩니다. `CODEX_GATEWAY_LISTEN` 환경 변수가 있으면 그 값이 우선하고, 관리 화면에서도 바꿀 수 없습니다. systemd 유닛은 수신 주소를 고정하지 않으므로, `/etc/codex-gateway.env`의 `CODEX_GATEWAY_LISTEN`을 비워 두면 관리 화면과 저장한 값이 쓰입니다.
 
 ## OAuth 로그인
+
+관리 화면의 Codex 로그인 버튼이 이 과정을 대신합니다. 아래는 터미널에서 할 때의 방법입니다.
 
 서버에서 다음을 실행합니다.
 
@@ -164,6 +169,8 @@ codex-gateway auth logout
 클라이언트에 주는 열쇠는 OpenAI access token이 아닙니다. 게이트웨이가 따로 발급한 `cg_` 키입니다. 이 키는 클라이언트에서 게이트웨이로 들어오는 요청만 확인합니다. 게이트웨이가 OpenAI에 보낼 때는 저장된 OAuth access token을 쓰고, 그 토큰은 키 발급 화면에도 응답에도 나오지 않습니다.
 
 발급 전에 OAuth 로그인이 끝나 있어야 합니다. 로그인이 없으면 키는 만들어지지만 Codex 요청은 `503`으로 거절됩니다.
+
+관리 화면에서는 API 키 칸에 이름을 적고 키 만들기를 누르면 됩니다. 새 키는 그 자리에서 한 번만 보이고 복사 버튼이 붙습니다. 아래는 터미널에서 할 때의 방법입니다.
 
 터미널에서 메뉴로 발급하려면 인자 없이 실행한 뒤 API 키, 키 만들기를 고릅니다. 이름만 물어보고, Enter만 누르면 `default`가 됩니다.
 
@@ -245,11 +252,11 @@ OpenAI-Beta: responses=experimental
 
 이 버전은 [openai/codex](https://github.com/openai/codex)의 최신 안정 릴리스를 따릅니다. GitHub Actions `.github/workflows/codex-version.yml`이 매일 00:17 KST에 latest 릴리스를 확인하고, 숫자가 다르면 `internal/oauth/oauth.go`와 이 문서의 버전 표기만 고친 뒤 기본 브랜치에 커밋합니다. `0.157.0-alpha.1` 같은 사전 릴리스는 넣지 않습니다. 기본 브랜치가 Actions의 push를 막으면 이 자동 커밋은 실패합니다.
 
-`/responses`의 `Accept`는 `text/event-stream` 입니다. `/responses/compact`만 `application/json` 입니다. 클라이언트가 보낸 `session_id`, `conversation_id`, `x-codex-*` 일부는 그대로 전달합니다. `instructions`가 비어 있으면 sub2api의 기본 Codex instructions를 넣습니다. `reasoning.effort`가 `minimal`이면 `none`으로 바꿉니다. 그 외 본문은 재인코딩하지 않습니다.
+`/responses`의 `Accept`는 `text/event-stream` 입니다. `/responses/compact`만 `application/json` 입니다. 클라이언트가 보낸 `session_id`, `conversation_id`, `x-codex-*` 일부는 그대로 전달합니다. `instructions`가 비어 있으면 sub2api의 기본 Codex instructions를 넣습니다. `reasoning.effort`가 `minimal`이면 `none`으로 바꿉니다. 고칠 것이 없으면 본문을 그대로 보냅니다. 고칠 때도 바꾼 필드 말고는 값을 그대로 두며, 최상위 키 순서와 공백만 달라질 수 있습니다.
 
 `GET /v1/models`는 ChatGPT Codex 모델 목록을 OpenAI list 형태로 바꿉니다. `GET /models`와 `GET /backend-api/codex/models`는 업스트림 JSON을 그대로 돌려줍니다. 모델 이름은 하드코딩하지 않습니다.
 
-SSE 응답은 업스트림에서 읽는 대로 클라이언트에 보내고 각 조각마다 flush 합니다. 클라이언트가 끊으면 업스트림 요청도 취소됩니다. 본문 상한은 32MB, 헤더 상한은 1MB 입니다. 업스트림으로의 리다이렉트는 따라가지 않고, TLS 검증을 끄지 않습니다.
+SSE 응답은 업스트림에서 읽는 대로 클라이언트에 보내고 각 조각마다 flush 합니다. 클라이언트가 끊으면 업스트림 요청도 취소됩니다. 본문 상한은 32MB, 헤더 상한은 1MB 입니다. 스트리밍이 아닌 업스트림 응답이 32MB를 넘으면 잘라서 보내지 않고 `502`를 돌려줍니다. 업스트림으로의 리다이렉트는 따라가지 않고, TLS 검증을 끄지 않습니다.
 
 access token은 만료 3분 전에 refresh token으로 갱신합니다. 동시에 여러 요청이 들어와도 프로세스 안에서는 mutex로, 프로세스 사이에서는 `refresh.lock`으로 갱신을 한 번만 합니다. 새 refresh token이 오면 access token과 함께 한 트랜잭션에 저장합니다. 응답에 refresh token이 없으면 기존 값을 유지합니다.
 
@@ -262,9 +269,11 @@ Run:
 codex-gateway auth login
 ```
 
+`403`은 본문에 `invalid_grant` 같은 재로그인 코드가 있을 때만 재로그인 필요로 봅니다. 코드가 없는 `403`은 차단 페이지일 수 있어 일시 오류로 다룹니다. 토큰 응답에 `expires_in`이 없으면 access token의 `exp`를 만료 시각으로 씁니다.
+
 네트워크 오류와 5xx는 기존 토큰을 유지합니다. access token이 아직 살아 있으면 그 토큰으로 요청을 계속합니다.
 
-`SIGINT`와 `SIGTERM`에서는 30초 안에 연결을 닫고 종료합니다.
+`SIGINT`와 `SIGTERM`에서는 30초 동안 진행 중인 요청을 기다립니다. 그때까지 끝나지 않은 스트림은 강제로 닫고 정상 종료합니다.
 
 ## systemd
 
@@ -277,11 +286,25 @@ sudo systemctl enable --now codex-gateway
 sudo systemctl status codex-gateway
 ```
 
-`/etc/codex-gateway.env`의 마스터 키를 채우거나, `/var/lib/codex-gateway/master.key`를 서비스 계정 소유 `0600`으로 둡니다. 로그인과 키 발급도 같은 계정으로 실행합니다.
+`/etc/codex-gateway.env`의 마스터 키를 채우거나, `/var/lib/codex-gateway/master.key`를 서비스 계정 소유 `0600`으로 둡니다.
+
+설치 스크립트 없이 직접 등록했다면 첫 설정 링크는 다음처럼 만듭니다. 서비스가 처음 뜰 때 이 파일을 만듭니다.
+
+```bash
+echo "http://127.0.0.1:8081/#setup=$(sudo cat /var/lib/codex-gateway/setup.token)"
+```
+
+터미널에서 로그인과 키 발급을 할 때는 서비스와 같은 계정으로 실행합니다.
 
 ```bash
 sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-gateway auth login
 sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-gateway key create
+```
+
+마스터 키를 `/etc/codex-gateway.env`에 넣었다면 CLI에도 같은 값을 넘깁니다.
+
+```bash
+sudo sh -c 'set -a; . /etc/codex-gateway.env; exec sudo -E -u codex-gateway codex-gateway key create'
 ```
 
 ## API 사용
@@ -381,7 +404,7 @@ DB에 있는 것은 OAuth 계정 하나와 API Key 목록, `listen` 설정, 관�
 - access token, refresh token, Authorization 헤더, API Key 전체, authorization code는 로그에 남기지 않습니다.
 - Gateway API Key와 OpenAI OAuth 토큰은 역할이 다릅니다. 키 관리 명령은 OAuth 토큰을 출력하지 않습니다.
 - 게이트웨이는 API Key를 업스트림에 넣지 않고, OAuth access token을 클라이언트 응답에 복사하지 않습니다.
-- `.env`, `data/`, `master.key`, `refresh.lock`, `*.db`와 SQLite WAL 파일은 git에서 제외됩니다. `.env.example`만 저장소에 있습니다.
+- `.env`, `data/`, `master.key`, `refresh.lock`, `setup.token`, `*.db`와 SQLite WAL 파일은 git에서 제외됩니다. `.env.example`만 저장소에 있습니다.
 - 쿼리 문자열 인증은 거부합니다.
 - TLS 검증을 끄지 않습니다.
 

@@ -16,3 +16,5 @@ __pycache__/
 *.pyc
 /internal/admin/dist/app/
 setup.token
+.claude/worktrees/
+.claude/settings.local.json
