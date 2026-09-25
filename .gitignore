@@ -18,3 +18,4 @@ __pycache__/
 setup.token
 .claude/worktrees/
 .claude/settings.local.json
+update.request

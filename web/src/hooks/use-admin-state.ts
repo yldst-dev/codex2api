@@ -26,8 +26,16 @@ export function useAdminState() {
     }
   }, [apply, fail])
 
+  useEffect(() => {
+    const onHash = () => void refresh()
+    window.addEventListener("hashchange", onHash)
+    return () => window.removeEventListener("hashchange", onHash)
+  }, [refresh])
+
   const authenticated = state?.authenticated === true
-  const pending = state?.authenticated === true && state.login !== null
+  const pending =
+    state?.authenticated === true &&
+    (state.login !== null || ["installing", "restarting", "requested"].includes(state.update.status))
 
   useEffect(() => {
     if (!authenticated) return

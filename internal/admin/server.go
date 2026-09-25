@@ -23,6 +23,7 @@ import (
 	"codex-gateway/internal/oauth"
 	"codex-gateway/internal/store"
 	"codex-gateway/internal/token"
+	"codex-gateway/internal/update"
 )
 
 //go:embed all:dist
@@ -48,6 +49,11 @@ type Server struct {
 	ListenLocked bool
 	AdminListen  string
 	Log          *slog.Logger
+	Version      string
+	Updates      *update.Client
+	UpdateMode   string
+	Executable   string
+	Restart      func()
 
 	mu       sync.Mutex
 	sessions map[string]session
@@ -55,6 +61,8 @@ type Server struct {
 	login    *pendingLogin
 	setupMu  sync.Mutex
 	listenMu sync.Mutex
+	updMu    sync.Mutex
+	upd      updateState
 }
 
 type session struct {
@@ -79,6 +87,9 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    64 << 10,
 		ErrorLog:          slog.NewLogLogger(s.logger().Handler(), slog.LevelWarn),
+	}
+	if s.updatesEnabled() {
+		go s.updateLoop(ctx)
 	}
 	errCh := make(chan error, 1)
 	go func() {
@@ -116,6 +127,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/keys/{id}/rotate", s.authed(s.rotateKey))
 	mux.HandleFunc("POST /api/keys/{id}/revoke", s.authed(s.revokeKey))
 	mux.HandleFunc("POST /api/listen", s.authed(s.setListen))
+	mux.HandleFunc("POST /api/update/check", s.authed(s.updateCheck))
+	mux.HandleFunc("POST /api/update/apply", s.authed(s.updateApply))
+	mux.HandleFunc("POST /api/update/auto", s.authed(s.updateAuto))
 	return s.guard(mux)
 }
 
@@ -285,6 +299,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		},
 		"admin_listen": s.AdminListen,
 		"data_dir":     s.DataDir,
+		"update":       s.updateJSON(ctx),
 	})
 }
 

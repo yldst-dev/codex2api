@@ -9,6 +9,7 @@ User=codex-gateway
 Group=codex-gateway
 WorkingDirectory=/var/lib/codex-gateway
 Environment=CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway
+Environment=CODEX_GATEWAY_UPDATER=systemd
 EnvironmentFile=-/etc/codex-gateway.env
 ExecStart=/usr/local/bin/codex-gateway server start
 Restart=on-failure

@@ -37,6 +37,21 @@ export type GatewayState = {
   locked: boolean
 }
 
+export type UpdateStatus = "idle" | "installing" | "restarting" | "requested" | "error"
+
+export type UpdateState = {
+  current: string
+  supported: boolean
+  mode: "systemd" | "self" | ""
+  auto: boolean
+  status: UpdateStatus
+  error: string
+  check_error: string
+  available: boolean
+  checked_at?: string
+  latest: { tag: string; url: string; published_at: string } | null
+}
+
 export type Dashboard = {
   authenticated: true
   account: Account | null
@@ -45,6 +60,7 @@ export type Dashboard = {
   gateway: GatewayState
   admin_listen: string
   data_dir: string
+  update: UpdateState
 }
 
 export type AdminState =
@@ -128,6 +144,10 @@ export const api = {
     request<CreatedKey>("POST", `/api/keys/${encodeURIComponent(id)}/rotate`),
   revokeKey: (id: string) =>
     request<{ ok: boolean }>("POST", `/api/keys/${encodeURIComponent(id)}/revoke`),
+  checkUpdate: () => request<{ update: UpdateState }>("POST", "/api/update/check"),
+  applyUpdate: () => request<{ update: UpdateState }>("POST", "/api/update/apply"),
+  setAutoUpdate: (enabled: boolean) =>
+    request<{ update: UpdateState }>("POST", "/api/update/auto", { enabled }),
   setListen: (listen: string) =>
     request<{ listen: string; running: boolean }>("POST", "/api/listen", { listen }),
 }

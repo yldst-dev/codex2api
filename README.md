@@ -79,6 +79,7 @@ ssh -L 8081:127.0.0.1:8081 -L 1455:127.0.0.1:1455 user@server
 - Codex 로그인, 토큰 새로 받기, 연결 해제
 - API 키 만들기, 재발급, 폐기. 새 키는 만든 직후 한 번만 보입니다.
 - 게이트웨이 수신 주소 바꾸기. 새 주소를 먼저 연 뒤 옛 주소를 닫으므로 재시작이 필요 없습니다.
+- 새 버전 확인과 업데이트, 자동 업데이트 켜고 끄기
 
 Codex 로그인 버튼을 누르면 OpenAI 로그인 창이 열리고, 끝나면 `127.0.0.1:1455` 콜백으로 자동 연결됩니다. 터널 없이 접속했다면 로그인 뒤 브라우저 주소창의 주소 전체를 화면의 입력칸에 붙여 넣으면 됩니다.
 
@@ -97,6 +98,38 @@ Codex 로그인 버튼을 누르면 OpenAI 로그인 창이 열리고, 끝나면
 sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-gateway admin reset-password
 ```
 
+## 업데이트
+
+관리 화면의 업데이트 칸에서 새 버전을 확인하고 바로 설치할 수 있습니다. 자동 업데이트는 기본으로 켜져 있고, 6시간마다 GitHub 최신 릴리스를 확인해서 새 버전이 있으면 설치합니다. 화면에서 끌 수 있습니다.
+
+설치는 이 순서로 합니다.
+
+1. `https://api.github.com/repos/yldst-dev/codex2api/releases/latest`에서 최신 태그를 읽습니다. `v1.2.3` 형태가 아닌 태그와 사전 릴리스는 받지 않습니다.
+2. 그 태그의 `SHA256SUMS`와 이 기기용 실행 파일을 HTTPS로 받습니다.
+3. SHA256이 맞을 때만 같은 폴더의 임시 파일을 실행 파일 자리로 옮깁니다. 맞지 않으면 기존 파일을 그대로 둡니다.
+4. 게이트웨이를 다시 시작합니다. 관리 화면 세션은 메모리에만 있으므로 다시 로그인해야 합니다.
+
+systemd 서비스는 권한 없는 계정으로 돌고 `/usr/local/bin`을 쓸 수 없습니다. 그래서 웹은 데이터 폴더에 `update.request` 파일만 만들고, root로 도는 `codex-gateway-update.path`가 이를 보고 `codex-gateway-update.service`를 실행합니다. 이 도우미는 요청 파일 내용을 믿지 않고 직접 최신 릴리스를 받아 확인한 뒤 서비스를 다시 시작합니다. 설치 스크립트가 두 유닛을 함께 등록합니다.
+
+직접 `codex-gateway server start`로 띄웠고 실행 파일 폴더에 쓸 수 있으면, 그 프로세스가 파일을 바꾸고 같은 PID로 다시 실행됩니다. 둘 다 아니면 웹 업데이트는 꺼지고 확인만 합니다. 직접 빌드한 `dev` 버전도 확인만 합니다.
+
+터미널에서는 다음을 씁니다.
+
+```bash
+codex-gateway version
+codex-gateway update --check
+sudo codex-gateway update --restart codex-gateway.service
+```
+
+`v0.1.0`으로 설치한 서버에는 업데이트 도우미가 없습니다. 설치 스크립트를 `--service`로 한 번 다시 실행하면 이후부터 웹에서 업데이트됩니다.
+
+도우미가 5분 안에 처리하지 않으면 관리 화면에 오류가 뜹니다. 그때는 서버에서 다음을 확인합니다.
+
+```bash
+systemctl status codex-gateway-update.path
+journalctl -u codex-gateway-update.service
+```
+
 ## 설정
 
 | 환경 변수 | 기본값 | 의미 |
@@ -105,6 +138,7 @@ sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-ga
 | `CODEX_GATEWAY_DATA_DIR` | `./data` | SQLite와 마스터 키 위치 |
 | `CODEX_GATEWAY_MASTER_KEY` | 없음 | 32바이트 키. hex 64자 또는 base64 |
 | `CODEX_GATEWAY_ADMIN_LISTEN` | `127.0.0.1:8081` | 관리 화면 주소. 루프백만 됩니다. `off`면 끕니다. |
+| `CODEX_GATEWAY_UPDATER` | 없음 | `systemd`면 웹 업데이트를 `codex-gateway-update.path`에 맡깁니다. systemd 유닛이 넣습니다. |
 
 마스터 키 우선순위는 환경 변수, 그다음 `CODEX_GATEWAY_DATA_DIR/master.key` 입니다. 둘 다 없고 `gateway.db`도 없는 첫 실행에서만 `master.key`를 만들고 권한을 `0600`으로 둡니다. 이 파일이 없으면 DB 안의 OAuth 토큰을 풀 수 없습니다.
 
@@ -278,11 +312,11 @@ codex-gateway auth login
 ## systemd
 
 ```bash
-sudo cp deploy/codex-gateway.service /etc/systemd/system/codex-gateway.service
+sudo cp deploy/codex-gateway.service deploy/codex-gateway-update.service deploy/codex-gateway-update.path /etc/systemd/system/
 sudo cp deploy/codex-gateway.env.example /etc/codex-gateway.env
 sudo chmod 600 /etc/codex-gateway.env
 sudo systemctl daemon-reload
-sudo systemctl enable --now codex-gateway
+sudo systemctl enable --now codex-gateway codex-gateway-update.path
 sudo systemctl status codex-gateway
 ```
 
@@ -393,11 +427,12 @@ ${CODEX_GATEWAY_DATA_DIR}/gateway.db
 ${CODEX_GATEWAY_DATA_DIR}/master.key
 ${CODEX_GATEWAY_DATA_DIR}/refresh.lock
 ${CODEX_GATEWAY_DATA_DIR}/setup.token
+${CODEX_GATEWAY_DATA_DIR}/update.request
 ```
 
 기본 데이터 디렉터리는 실행 위치의 `data/` 입니다. systemd 예시는 `/var/lib/codex-gateway` 입니다. DB 파일과 마스터 키는 `0600`, 디렉터리는 `0700` 입니다.
 
-DB에 있는 것은 OAuth 계정 하나와 API Key 목록, `listen` 설정, 관리자 비밀번호 해시입니다. `setup.token`은 관리자 비밀번호를 정하기 전에만 있습니다. email, account id, plan type은 상태 출력용으로 평문입니다. access token, refresh token, id token은 암호화됩니다.
+DB에 있는 것은 OAuth 계정 하나와 API Key 목록, `listen` 설정, 관리자 비밀번호 해시입니다. `setup.token`은 관리자 비밀번호를 정하기 전에만 있고, `update.request`는 업데이트를 요청한 뒤 도우미가 처리하기 전까지만 있습니다. 자동 업데이트 설정도 DB에 들어 있습니다. email, account id, plan type은 상태 출력용으로 평문입니다. access token, refresh token, id token은 암호화됩니다.
 
 ## 자격 증명 주의사항
 

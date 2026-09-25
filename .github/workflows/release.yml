@@ -46,7 +46,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -trimpath -ldflags "-s -w" \
+          go build -trimpath -ldflags "-s -w -X codex-gateway/internal/buildinfo.Version=${GITHUB_REF_NAME}" \
             -o "codex-gateway-${GOOS}-${GOARCH}" ./cmd/codex-gateway
       - uses: actions/upload-artifact@v4
         with:

@@ -11,6 +11,7 @@ import { AccountPanel } from "./account-panel"
 import { GatewayPanel } from "./gateway-panel"
 import { KeysPanel } from "./keys-panel"
 import { SecurityPanel } from "./security-panel"
+import { UpdatePanel } from "./update-panel"
 
 const list: Variants = {
   show: { transition: { staggerChildren: 0.05 } },
@@ -62,6 +63,13 @@ export function DashboardScreen({ data, error, refresh }: DashboardScreenProps) 
               <Badge variant="destructive">게이트웨이 멈춤</Badge>
             )}
             <Badge variant="outline">키 {data.keys.filter((k) => k.status === "active").length}개</Badge>
+            {data.update.available && data.update.latest ? (
+              <Badge>{data.update.latest.tag} 업데이트 있음</Badge>
+            ) : (
+              <Badge variant="outline" className="font-mono">
+                {data.update.current}
+              </Badge>
+            )}
           </div>
         </div>
         <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void logout()}>
@@ -87,6 +95,9 @@ export function DashboardScreen({ data, error, refresh }: DashboardScreenProps) 
         </motion.div>
         <motion.div variants={item}>
           <GatewayPanel gateway={data.gateway} dataDir={data.data_dir} refresh={refresh} />
+        </motion.div>
+        <motion.div variants={item}>
+          <UpdatePanel state={data.update} refresh={refresh} />
         </motion.div>
         <motion.div variants={item}>
           <SecurityPanel adminListen={data.admin_listen} refresh={refresh} />

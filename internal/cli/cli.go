@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"codex-gateway/internal/apikey"
+	"codex-gateway/internal/buildinfo"
 	"codex-gateway/internal/config"
 	"codex-gateway/internal/oauth"
 	"codex-gateway/internal/store"
@@ -27,6 +28,17 @@ func Run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	jsonOut, args := takeJSON(args)
 	if len(args) > 0 && (args[0] == "help" || args[0] == "-h" || args[0] == "--help") {
 		fmt.Fprint(stdout, helpText)
+		return 0
+	}
+	if len(args) > 0 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Fprintln(stdout, buildinfo.Version)
+		return 0
+	}
+	if len(args) > 0 && args[0] == "update" {
+		if err := runUpdate(args[1:], stdout, jsonOut); err != nil {
+			fmt.Fprintf(stderr, "error: %s\n", err.Error())
+			return 1
+		}
 		return 0
 	}
 	if len(args) == 0 && (!terminalReady(stdin, stdout) || jsonOut) {
@@ -595,10 +607,13 @@ Usage:
   codex-gateway config show [--json]
   codex-gateway config set listen HOST:PORT
   codex-gateway admin reset-password [--json]
+  codex-gateway update [--check] [--restart UNIT.service] [--json]
+  codex-gateway version
 
 Environment:
   CODEX_GATEWAY_LISTEN      default 127.0.0.1:8080
   CODEX_GATEWAY_DATA_DIR    default ./data
   CODEX_GATEWAY_MASTER_KEY  32-byte hex or base64 key
   CODEX_GATEWAY_ADMIN_LISTEN  default 127.0.0.1:8081, loopback only, "off" disables
+  CODEX_GATEWAY_UPDATER     "systemd" hands web updates to codex-gateway-update.path
 `

@@ -60,10 +60,13 @@ fi
 mkdir -p /var/lib/codex-gateway
 chown codex-gateway:codex-gateway /var/lib/codex-gateway
 chmod 700 /var/lib/codex-gateway
-curl -fsSL "https://raw.githubusercontent.com/${repo}/main/deploy/codex-gateway.service" \
-  -o /etc/systemd/system/codex-gateway.service
+for unit in codex-gateway.service codex-gateway-update.service codex-gateway-update.path; do
+  curl -fsSL "https://raw.githubusercontent.com/${repo}/main/deploy/${unit}" \
+    -o "/etc/systemd/system/${unit}"
+done
 systemctl daemon-reload
 systemctl enable codex-gateway >/dev/null 2>&1
+systemctl enable --now codex-gateway-update.path >/dev/null 2>&1
 systemctl restart codex-gateway
 
 admin=$(sed -n 's/^CODEX_GATEWAY_ADMIN_LISTEN=//p' /etc/codex-gateway.env 2>/dev/null | tail -n 1)

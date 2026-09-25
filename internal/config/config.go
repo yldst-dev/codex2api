@@ -24,6 +24,7 @@ const (
 	DefaultAdminListen = "127.0.0.1:8081"
 	EnvAdminListen     = "CODEX_GATEWAY_ADMIN_LISTEN"
 	SetupTokenFile     = "setup.token"
+	EnvUpdater         = "CODEX_GATEWAY_UPDATER"
 )
 
 type Config struct {

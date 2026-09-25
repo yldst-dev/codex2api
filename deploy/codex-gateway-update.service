@@ -1,0 +1,11 @@
+[Unit]
+Description=Update Codex Gateway to the latest release
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/rm -f /var/lib/codex-gateway/update.request
+ExecStart=/usr/local/bin/codex-gateway update --restart codex-gateway.service
+TimeoutStartSec=15min
+PrivateTmp=true

@@ -13,9 +13,11 @@ import (
 	"golang.org/x/term"
 
 	"codex-gateway/internal/admin"
+	"codex-gateway/internal/buildinfo"
 	"codex-gateway/internal/config"
 	"codex-gateway/internal/gateway"
 	"codex-gateway/internal/oauth"
+	"codex-gateway/internal/update"
 )
 
 func (a *app) serve() error {
@@ -59,6 +61,10 @@ func (a *app) serve() error {
 	if token != "" {
 		a.printSetupHint(token)
 	}
+	exe, mode := a.updateMode()
+	adminCtx, cancelAdmin := context.WithCancel(ctx)
+	defer cancelAdmin()
+	restart := make(chan struct{}, 1)
 	srv := &admin.Server{
 		Store:        a.store,
 		Tokens:       a.tokens,
@@ -69,8 +75,51 @@ func (a *app) serve() error {
 		Listen:       a.cfg.Listen,
 		ListenLocked: a.cfg.ListenLocked,
 		AdminListen:  a.cfg.AdminListen,
+		Version:      buildinfo.Version,
+		Updates:      update.NewClient(),
+		UpdateMode:   mode,
+		Executable:   exe,
+		Restart: func() {
+			select {
+			case restart <- struct{}{}:
+			default:
+			}
+			cancelAdmin()
+		},
 	}
-	return srv.Serve(ctx, ln)
+	if err := srv.Serve(adminCtx, ln); err != nil {
+		return err
+	}
+	select {
+	case <-restart:
+		return a.reexec(runner, exe)
+	default:
+		return nil
+	}
+}
+
+func (a *app) updateMode() (string, string) {
+	exe, err := update.Executable()
+	if err != nil {
+		return "", ""
+	}
+	if os.Getenv(config.EnvUpdater) == admin.UpdateModeSystemd {
+		_ = os.Remove(filepath.Join(a.cfg.DataDir, admin.UpdateRequestFile))
+		return exe, admin.UpdateModeSystemd
+	}
+	if update.Writable(filepath.Dir(exe)) {
+		return exe, admin.UpdateModeSelf
+	}
+	return exe, ""
+}
+
+func (a *app) reexec(runner *gateway.Runner, exe string) error {
+	shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = runner.Shutdown(shutCtx)
+	_ = a.store.Close()
+	fmt.Fprintf(a.err, "Restarting %s\n", exe)
+	return syscall.Exec(exe, []string{exe, "server", "start"}, os.Environ())
 }
 
 func (a *app) printSetupHint(token string) {
