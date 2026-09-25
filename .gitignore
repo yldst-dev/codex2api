@@ -14,3 +14,5 @@ refresh.lock
 coverage.out
 __pycache__/
 *.pyc
+/internal/admin/dist/app/
+setup.token

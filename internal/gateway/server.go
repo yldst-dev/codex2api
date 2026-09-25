@@ -28,7 +28,6 @@ const (
 )
 
 type Gateway struct {
-	Listen       string
 	Tokens       *token.Manager
 	Keys         *apikey.Service
 	ResponsesURL string
@@ -53,36 +52,6 @@ func (g *Gateway) Handler() http.Handler {
 	mux.HandleFunc("POST /responses/compact", g.responses)
 	mux.HandleFunc("POST /backend-api/codex/responses/compact", g.responses)
 	return mux
-}
-
-func (g *Gateway) Run(ctx context.Context) error {
-	ln, err := net.Listen("tcp", g.Listen)
-	if err != nil {
-		return err
-	}
-	srv := &http.Server{
-		Handler:           g.Handler(),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20,
-		ErrorLog:          slog.NewLogLogger(g.logger().Handler(), slog.LevelWarn),
-	}
-	errCh := make(chan error, 1)
-	go func() {
-		err := srv.Serve(ln)
-		if errors.Is(err, http.ErrServerClosed) {
-			err = nil
-		}
-		errCh <- err
-	}()
-	select {
-	case <-ctx.Done():
-		shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutCtx)
-	case err := <-errCh:
-		return err
-	}
 }
 
 func (g *Gateway) logger() *slog.Logger {

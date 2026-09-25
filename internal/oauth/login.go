@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net"
@@ -15,11 +16,23 @@ type CallbackResult struct {
 	Err   error
 }
 
-func (f *Flow) WaitCallback(ctx context.Context) (*Token, error) {
+func ListenCallback() (net.Listener, error) {
 	ln, err := net.Listen("tcp", CallbackAddr)
 	if err != nil {
 		return nil, fmt.Errorf("listen on %s: %w", CallbackAddr, err)
 	}
+	return ln, nil
+}
+
+func (f *Flow) WaitCallback(ctx context.Context) (*Token, error) {
+	ln, err := ListenCallback()
+	if err != nil {
+		return nil, err
+	}
+	return f.ServeCallback(ctx, ln)
+}
+
+func (f *Flow) ServeCallback(ctx context.Context, ln net.Listener) (*Token, error) {
 	result := make(chan CallbackResult, 1)
 	var accepted atomic.Bool
 	send := func(res CallbackResult) {
@@ -30,13 +43,17 @@ func (f *Flow) WaitCallback(ctx context.Context) (*Token, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth/callback", func(w http.ResponseWriter, r *http.Request) {
+		if _, state, err := ParseCallback(r.URL.RequestURI()); err != nil || subtle.ConstantTimeCompare([]byte(state), []byte(f.State)) != 1 {
+			http.Error(w, "This login link does not match the current login. Start again from the gateway.", http.StatusBadRequest)
+			return
+		}
 		if !accepted.CompareAndSwap(false, true) {
 			http.Error(w, "Login already finished.", http.StatusConflict)
 			return
 		}
 		tok, err := f.ExchangeCallback(r.Context(), r.URL.RequestURI())
 		if err != nil {
-			http.Error(w, "Login failed. Return to the terminal.", http.StatusBadRequest)
+			http.Error(w, "Login failed. Go back to the gateway and try again.", http.StatusBadRequest)
 			send(CallbackResult{Err: err})
 			return
 		}

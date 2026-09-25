@@ -18,7 +18,6 @@ import (
 
 	"codex-gateway/internal/apikey"
 	"codex-gateway/internal/config"
-	"codex-gateway/internal/gateway"
 	"codex-gateway/internal/oauth"
 	"codex-gateway/internal/store"
 	"codex-gateway/internal/token"
@@ -120,6 +119,8 @@ func (a *app) dispatch(args []string) error {
 		return a.server(args[1:])
 	case "config":
 		return a.configCmd(args[1:])
+	case "admin":
+		return a.adminCmd(args[1:])
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -400,15 +401,7 @@ func (a *app) server(args []string) error {
 		if len(args) != 1 {
 			return fmt.Errorf("usage: codex-gateway server start")
 		}
-		gw := &gateway.Gateway{
-			Listen: a.cfg.Listen,
-			Tokens: a.tokens,
-			Keys:   a.keys,
-		}
-		fmt.Fprintf(a.err, "Listening on %s\n", a.cfg.Listen)
-		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-		defer stop()
-		return gw.Run(ctx)
+		return a.serve()
 	case "status":
 		if len(args) != 1 {
 			return fmt.Errorf("usage: codex-gateway server status")
@@ -595,9 +588,11 @@ Usage:
   codex-gateway server status [--json]
   codex-gateway config show [--json]
   codex-gateway config set listen HOST:PORT
+  codex-gateway admin reset-password [--json]
 
 Environment:
   CODEX_GATEWAY_LISTEN      default 127.0.0.1:8080
   CODEX_GATEWAY_DATA_DIR    default ./data
   CODEX_GATEWAY_MASTER_KEY  32-byte hex or base64 key
+  CODEX_GATEWAY_ADMIN_LISTEN  default 127.0.0.1:8081, loopback only, "off" disables
 `

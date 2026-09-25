@@ -2,7 +2,7 @@
 
 Ubuntu 서버에서 OpenAI Codex OAuth 로그인을 끝낸 뒤, 그 자격 증명을 서버 안에 두고, 별도의 Gateway API Key로 Codex Responses 요청을 대신 보내는 작은 게이트웨이입니다.
 
-터미널에서 인자 없이 `codex-gateway`를 실행하면 방향키 메뉴가 열립니다. 직접 입력하는 값은 키 이름, 콜백 주소, 수신 주소뿐입니다. 스크립트는 아래 하위 명령을 그대로 쓰면 됩니다.
+설치 스크립트를 한 번 실행한 뒤에는 브라우저 관리 화면에서 Codex 로그인, API 키 발급, 수신 주소 변경까지 모두 할 수 있습니다. 바꾼 값은 재시작 없이 바로 적용됩니다. 터미널이 편하면 인자 없이 `codex-gateway`를 실행해 방향키 메뉴를 써도 되고, 스크립트에서는 아래 하위 명령을 그대로 씁니다.
 
 하는 일은 네 가지입니다.
 
@@ -11,7 +11,7 @@ Ubuntu 서버에서 OpenAI Codex OAuth 로그인을 끝낸 뒤, 그 자격 증�
 - Gateway API Key 발급과 폐기
 - Codex Responses API 프록시
 
-회원가입, 관리 웹, 결제, 그룹, Redis, PostgreSQL은 없습니다. 저장소는 SQLite 하나입니다.
+회원가입, 결제, 그룹, Redis, PostgreSQL은 없습니다. 저장소는 SQLite 하나입니다.
 
 OAuth 상수와 토큰 교환, 기본 instructions 문구는 [sub2api](https://github.com/Wei-Shaw/sub2api) `20a94fbb567b62208751292ed7786b24a7e7c0fe`에서 가져왔습니다. 라이선스는 LGPL-3.0 입니다. 자세한 출처는 `NOTICE`에 있습니다.
 
@@ -31,11 +31,21 @@ Ubuntu에서 계정, 데이터 디렉터리, systemd 서비스까지 만들려�
 curl -fsSL https://raw.githubusercontent.com/yldst-dev/codex2api/main/scripts/install-release.sh | sudo sh -s -- --service
 ```
 
-소스에서 직접 빌드할 때는 Go 1.24 이상이 필요합니다.
+끝나면 관리자 비밀번호를 정하는 1회용 링크가 출력됩니다. 그 링크를 열면 나머지 설정은 [관리 화면](#관리-화면)에서 합니다.
+
+```text
+Open this link to set the admin password and finish setup:
+
+  http://127.0.0.1:8081/#setup=...
+```
+
+소스에서 직접 빌드할 때는 Go 1.24 이상과 Node.js 24 이상이 필요합니다. 관리 화면을 먼저 빌드해야 실행 파일 안에 들어갑니다.
 
 ```bash
 git clone https://github.com/yldst-dev/codex2api.git
 cd codex2api
+npm --prefix web ci
+npm --prefix web run build
 CGO_ENABLED=0 go build -o codex-gateway ./cmd/codex-gateway
 sudo install -m 0755 codex-gateway /usr/local/bin/codex-gateway
 ```
@@ -52,6 +62,40 @@ sudo install -m 0755 codex-gateway /usr/local/bin/codex-gateway
 
 데이터 디렉터리와 마스터 키는 이 계정이 소유해야 합니다. root로 로그인하면 서비스 계정이 DB를 읽지 못합니다.
 
+## 관리 화면
+
+`codex-gateway server start`는 게이트웨이와 함께 관리 화면을 `127.0.0.1:8081`에 엽니다. systemd 서비스도 같은 명령으로 뜨므로 따로 켤 것이 없습니다.
+
+원격 서버라면 PC에서 SSH 터널을 먼저 열고, 설치할 때 받은 링크를 PC 브라우저로 엽니다. `1455`는 Codex 로그인 콜백용입니다.
+
+```bash
+ssh -L 8081:127.0.0.1:8081 -L 1455:127.0.0.1:1455 user@server
+```
+
+관리 화면에서 하는 일은 다음과 같습니다.
+
+- 관리자 비밀번호 정하기와 바꾸기
+- Codex 로그인, 토큰 새로 받기, 연결 해제
+- API 키 만들기, 재발급, 폐기. 새 키는 만든 직후 한 번만 보입니다.
+- 게이트웨이 수신 주소 바꾸기. 새 주소를 먼저 연 뒤 옛 주소를 닫으므로 재시작이 필요 없습니다.
+
+Codex 로그인 버튼을 누르면 OpenAI 로그인 창이 열리고, 끝나면 `127.0.0.1:1455` 콜백으로 자동 연결됩니다. 터널 없이 접속했다면 로그인 뒤 브라우저 주소창의 주소 전체를 화면의 입력칸에 붙여 넣으면 됩니다.
+
+보안 경계는 다음과 같습니다.
+
+- 관리 화면은 루프백 주소에만 열립니다. `CODEX_GATEWAY_ADMIN_LISTEN`에 루프백이 아닌 주소를 넣으면 시작하지 않습니다.
+- `Host`가 `127.0.0.1`, `localhost`, `::1`이 아닌 요청은 거절합니다. DNS rebinding으로 들어오는 요청을 막기 위해서입니다.
+- 쓰기 요청은 JSON만 받고, 다른 출처의 `Origin`이나 `Sec-Fetch-Site: cross-site`가 붙으면 거절합니다.
+- 세션은 쿠키가 아니라 탭의 `sessionStorage`에 두고 `Authorization` 헤더로 보냅니다. 같은 기기의 다른 localhost 앱에 세션이 새지 않습니다.
+- 관리자 비밀번호는 PBKDF2-SHA256 600000회로 저장합니다. 5분 안에 10번 틀리면 잠시 막힙니다. 비밀번호를 바꾸면 다른 세션은 모두 끊깁니다.
+- 1회용 설정 링크는 `setup.token` 파일에만 있고, 비밀번호를 정하면 지워집니다. systemd 로그에는 링크를 남기지 않습니다.
+
+비밀번호를 잊었으면 서버에서 새 설정 링크를 받습니다. 서비스는 다시 시작하지 않아도 됩니다.
+
+```bash
+sudo -u codex-gateway env CODEX_GATEWAY_DATA_DIR=/var/lib/codex-gateway codex-gateway admin reset-password
+```
+
 ## 설정
 
 | 환경 변수 | 기본값 | 의미 |
@@ -59,6 +103,7 @@ sudo install -m 0755 codex-gateway /usr/local/bin/codex-gateway
 | `CODEX_GATEWAY_LISTEN` | `127.0.0.1:8080` | 수신 주소. 외부 공개는 이 값을 직접 바꿀 때만 됩니다. |
 | `CODEX_GATEWAY_DATA_DIR` | `./data` | SQLite와 마스터 키 위치 |
 | `CODEX_GATEWAY_MASTER_KEY` | 없음 | 32바이트 키. hex 64자 또는 base64 |
+| `CODEX_GATEWAY_ADMIN_LISTEN` | `127.0.0.1:8081` | 관리 화면 주소. 루프백만 됩니다. `off`면 끕니다. |
 
 마스터 키 우선순위는 환경 변수, 그다음 `CODEX_GATEWAY_DATA_DIR/master.key` 입니다. 둘 다 없으면 첫 실행에서 `master.key`를 만들고 권한을 `0600`으로 둡니다. 이 파일이 없으면 DB 안의 OAuth 토큰을 풀 수 없습니다.
 
@@ -70,7 +115,7 @@ openssl rand -base64 32
 
 출력값을 `CODEX_GATEWAY_MASTER_KEY`에 넣거나, `master.key` 파일에 한 줄로 저장합니다.
 
-`codex-gateway config set listen 127.0.0.1:8080`은 데이터 디렉터리에 수신 주소만 저장합니다. 이미 떠 있는 서버에는 재시작 후 적용됩니다. 환경 변수가 있으면 그 값이 우선합니다.
+수신 주소는 관리 화면에서 바꾸면 바로 적용됩니다. `codex-gateway config set listen 127.0.0.1:8080`은 데이터 디렉터리에 값만 저장하므로 이미 떠 있는 서버에는 재시작 후 적용됩니다. `CODEX_GATEWAY_LISTEN` 환경 변수가 있으면 그 값이 우선하고, 관리 화면에서도 바꿀 수 없습니다. 기본 systemd 파일은 이 변수를 넣지 않습니다.
 
 ## OAuth 로그인
 
@@ -170,7 +215,7 @@ codex-gateway server start
 codex-gateway server status
 ```
 
-기본 수신 주소는 `127.0.0.1:8080` 입니다. `0.0.0.0`으로 열려면 `CODEX_GATEWAY_LISTEN`을 직접 지정해야 합니다.
+기본 수신 주소는 `127.0.0.1:8080` 입니다. `0.0.0.0`으로 열려면 관리 화면에서 바꾸거나 `CODEX_GATEWAY_LISTEN`을 직접 지정해야 합니다. 관리 화면은 이와 별도로 `127.0.0.1:8081`에 열립니다.
 
 준비된 경로는 다음입니다.
 
@@ -324,11 +369,12 @@ Codex CLI나 다른 클라이언트를 붙일 때는 공급자 주소를 `http:/
 ${CODEX_GATEWAY_DATA_DIR}/gateway.db
 ${CODEX_GATEWAY_DATA_DIR}/master.key
 ${CODEX_GATEWAY_DATA_DIR}/refresh.lock
+${CODEX_GATEWAY_DATA_DIR}/setup.token
 ```
 
 기본 데이터 디렉터리는 실행 위치의 `data/` 입니다. systemd 예시는 `/var/lib/codex-gateway` 입니다. DB 파일과 마스터 키는 `0600`, 디렉터리는 `0700` 입니다.
 
-DB에 있는 것은 OAuth 계정 하나와 API Key 목록, `listen` 설정입니다. email, account id, plan type은 상태 출력용으로 평문입니다. access token, refresh token, id token은 암호화됩니다.
+DB에 있는 것은 OAuth 계정 하나와 API Key 목록, `listen` 설정, 관리자 비밀번호 해시입니다. `setup.token`은 관리자 비밀번호를 정하기 전에만 있습니다. email, account id, plan type은 상태 출력용으로 평문입니다. access token, refresh token, id token은 암호화됩니다.
 
 ## 자격 증명 주의사항
 
@@ -371,6 +417,16 @@ refresh token이 거절되면 기존 토큰은 DB에 남아 있고 상태만 재
 Codex OAuth와 Codex 요청 형식의 일부는 Wei-Shaw의 sub2api에서 파생되었습니다. sub2api도 LGPL-3.0 입니다. 파생 범위와 원본 파일은 `NOTICE`를 보십시오. 사용자 시스템, 결제, 프록시 풀, Claude, Gemini, Grok 연동은 가져오지 않았습니다.
 
 ## 개발
+
+관리 화면은 `web/`에 있는 Vite, React, TypeScript, shadcn/ui 프로젝트입니다. 빌드 결과는 `internal/admin/dist/app`에 들어가고 Go 실행 파일에 포함됩니다.
+
+```bash
+npm --prefix web ci
+npm --prefix web run lint
+npm --prefix web run build
+```
+
+화면을 고치면서 볼 때는 게이트웨이를 띄운 채 `npm --prefix web run dev`를 실행합니다. `/api` 요청은 `127.0.0.1:8081`로 넘어갑니다. 다른 주소면 `CODEX_GATEWAY_ADMIN_URL`로 바꿉니다.
 
 ```bash
 go fmt ./...

@@ -50,6 +50,7 @@ else
 fi
 
 if [ "$service" -ne 1 ]; then
+  echo "run 'codex-gateway server start' and open the admin link it prints"
   exit 0
 fi
 
@@ -62,5 +63,44 @@ chmod 700 /var/lib/codex-gateway
 curl -fsSL "https://raw.githubusercontent.com/${repo}/main/deploy/codex-gateway.service" \
   -o /etc/systemd/system/codex-gateway.service
 systemctl daemon-reload
-systemctl enable --now codex-gateway
-systemctl --no-pager --full status codex-gateway
+systemctl enable codex-gateway >/dev/null 2>&1
+systemctl restart codex-gateway
+
+admin=$(sed -n 's/^CODEX_GATEWAY_ADMIN_LISTEN=//p' /etc/codex-gateway.env 2>/dev/null | tail -n 1)
+admin=${admin:-127.0.0.1:8081}
+token_file=/var/lib/codex-gateway/setup.token
+waited=0
+while [ "$waited" -lt 15 ]; do
+  if systemctl is-active --quiet codex-gateway && [ -s "$token_file" ]; then
+    break
+  fi
+  sleep 1
+  waited=$((waited + 1))
+done
+
+if ! systemctl is-active --quiet codex-gateway; then
+  systemctl --no-pager --full status codex-gateway || true
+  echo "codex-gateway did not start. Check: journalctl -u codex-gateway" >&2
+  exit 1
+fi
+
+echo
+echo "codex-gateway is running."
+echo
+if [ "$admin" = "off" ]; then
+  echo "The admin page is off (CODEX_GATEWAY_ADMIN_LISTEN=off)."
+  exit 0
+fi
+if [ -s "$token_file" ]; then
+  echo "Open this link to set the admin password and finish setup:"
+  echo
+  echo "  http://${admin}/#setup=$(tr -d '[:space:]' < "$token_file")"
+else
+  echo "Admin page:"
+  echo
+  echo "  http://${admin}/"
+fi
+echo
+echo "From another computer, open an SSH tunnel first and use the same link:"
+echo
+echo "  ssh -L ${admin##*:}:127.0.0.1:${admin##*:} -L 1455:127.0.0.1:1455 user@this-server"

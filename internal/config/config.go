@@ -18,6 +18,10 @@ const (
 	EnvMasterKey  = "CODEX_GATEWAY_MASTER_KEY"
 	MasterKeyFile = "master.key"
 	MetaListen    = "listen"
+
+	DefaultAdminListen = "127.0.0.1:8081"
+	EnvAdminListen     = "CODEX_GATEWAY_ADMIN_LISTEN"
+	SetupTokenFile     = "setup.token"
 )
 
 type Config struct {
@@ -26,6 +30,8 @@ type Config struct {
 	MasterKey       []byte
 	MasterKeySource string
 	GeneratedKey    bool
+	ListenLocked    bool
+	AdminListen     string
 }
 
 func Load() (*Config, error) {
@@ -45,9 +51,11 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Listen:  strings.TrimSpace(os.Getenv(EnvListen)),
-		DataDir: abs,
+		Listen:      strings.TrimSpace(os.Getenv(EnvListen)),
+		DataDir:     abs,
+		AdminListen: ResolveAdminListen(os.Getenv(EnvAdminListen)),
 	}
+	cfg.ListenLocked = cfg.Listen != ""
 	if envKey := strings.TrimSpace(os.Getenv(EnvMasterKey)); envKey != "" {
 		key, err := ParseMasterKey(envKey)
 		if err != nil {
@@ -151,6 +159,36 @@ func ValidateListen(addr string) error {
 		return fmt.Errorf("listen address must be host:port")
 	}
 	return nil
+}
+
+func ResolveAdminListen(envValue string) string {
+	v := strings.TrimSpace(envValue)
+	switch {
+	case v == "":
+		return DefaultAdminListen
+	case strings.EqualFold(v, "off"):
+		return ""
+	}
+	return v
+}
+
+func ValidateAdminListen(addr string) error {
+	host, port, err := net.SplitHostPort(strings.TrimSpace(addr))
+	if err != nil || port == "" {
+		return fmt.Errorf("%s must be host:port", EnvAdminListen)
+	}
+	if !IsLoopbackHost(host) {
+		return fmt.Errorf("%s must use a loopback address such as 127.0.0.1", EnvAdminListen)
+	}
+	return nil
+}
+
+func IsLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip != nil && ip.IsLoopback()
 }
 
 func HealthURL(listen string) (string, error) {
