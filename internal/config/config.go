@@ -23,6 +23,7 @@ const (
 
 	DefaultAdminListen = "127.0.0.1:8081"
 	EnvAdminListen     = "CODEX_GATEWAY_ADMIN_LISTEN"
+	EnvAdminAllow      = "CODEX_GATEWAY_ADMIN_ALLOW"
 	SetupTokenFile     = "setup.token"
 	EnvUpdater         = "CODEX_GATEWAY_UPDATER"
 )
@@ -35,6 +36,7 @@ type Config struct {
 	GeneratedKey    bool
 	ListenLocked    bool
 	AdminListen     string
+	AdminAllow      string
 }
 
 func Load() (*Config, error) {
@@ -57,6 +59,7 @@ func Load() (*Config, error) {
 		Listen:      strings.TrimSpace(os.Getenv(EnvListen)),
 		DataDir:     abs,
 		AdminListen: ResolveAdminListen(os.Getenv(EnvAdminListen)),
+		AdminAllow:  strings.TrimSpace(os.Getenv(EnvAdminAllow)),
 	}
 	cfg.ListenLocked = cfg.Listen != ""
 	if envKey := strings.TrimSpace(os.Getenv(EnvMasterKey)); envKey != "" {
@@ -178,17 +181,6 @@ func ResolveAdminListen(envValue string) string {
 		return ""
 	}
 	return v
-}
-
-func ValidateAdminListen(addr string) error {
-	host, port, err := net.SplitHostPort(strings.TrimSpace(addr))
-	if err != nil || port == "" {
-		return fmt.Errorf("%s must be host:port", EnvAdminListen)
-	}
-	if !IsLoopbackHost(host) {
-		return fmt.Errorf("%s must use a loopback address such as 127.0.0.1", EnvAdminListen)
-	}
-	return nil
 }
 
 func IsLoopbackHost(host string) bool {

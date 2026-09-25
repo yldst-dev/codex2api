@@ -8,7 +8,13 @@ import { Input } from "@/components/ui/input"
 import { useAction } from "@/hooks/use-action"
 import { api, setToken } from "@/lib/api"
 
-export function SecurityPanel({ adminListen, refresh }: { adminListen: string; refresh: () => Promise<void> }) {
+type SecurityPanelProps = {
+  adminListen: string
+  adminAllow: string
+  refresh: () => Promise<void>
+}
+
+export function SecurityPanel({ adminListen, adminAllow, refresh }: SecurityPanelProps) {
   const { busy, run } = useAction(refresh)
   const [current, setCurrent] = useState("")
   const [next, setNext] = useState("")
@@ -32,7 +38,17 @@ export function SecurityPanel({ adminListen, refresh }: { adminListen: string; r
       <CardHeader>
         <CardTitle>관리자</CardTitle>
         <CardDescription>
-          관리 화면은 <span className="font-mono text-xs">{adminListen}</span>에서만 열립니다. 원격 서버라면 SSH 터널로 접속하세요.
+          {adminAllow ? (
+            <>
+              관리 화면은 <span className="font-mono text-xs">{adminListen}</span>에서 열리고{" "}
+              <span className="font-mono text-xs">{adminAllow}</span> 대역에서 접속할 수 있습니다. HTTPS가 아니라서 비밀번호가
+              암호화되지 않으니 믿을 수 있는 네트워크에서만 쓰세요.
+            </>
+          ) : (
+            <>
+              관리 화면은 <span className="font-mono text-xs">{adminListen}</span>에서만 열립니다. 원격 서버라면 SSH 터널로 접속하세요.
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>

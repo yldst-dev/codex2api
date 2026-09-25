@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
 import { useAction } from "@/hooks/use-action"
 import { api, type Account, type PendingLogin } from "@/lib/api"
-import { formatDate } from "@/lib/format"
+import { formatDate, openedOverNetwork } from "@/lib/format"
 
 type AccountPanelProps = {
   account: Account | null
@@ -173,7 +173,15 @@ function LoginSteps({ login, refresh }: { login: PendingLogin; refresh: () => Pr
       </li>
       <li className="flex flex-col gap-2">
         <p className="font-medium">2. 끝나면 자동으로 연결됩니다</p>
-        {login.callback ? (
+        {openedOverNetwork() ? (
+          <Alert>
+            <TriangleAlertIcon />
+            <AlertTitle>네트워크 주소로 접속했습니다</AlertTitle>
+            <AlertDescription>
+              로그인이 끝나면 브라우저가 이 PC의 localhost:1455로 이동해서 연결할 수 없다는 화면이 뜹니다. 정상입니다. 그 화면의 주소 전체를 아래 3번에 붙여 넣으세요.
+            </AlertDescription>
+          </Alert>
+        ) : login.callback ? (
           <p className="flex items-start gap-2 text-muted-foreground">
             <Loader2Icon className="mt-0.5 size-4 shrink-0 animate-spin" />
             <span>

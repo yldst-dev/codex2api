@@ -40,7 +40,11 @@ func (a *app) serve() error {
 		return nil
 	}
 
-	if err := config.ValidateAdminListen(a.cfg.AdminListen); err != nil {
+	access, err := config.ParseAdminAllow(a.cfg.AdminAllow)
+	if err != nil {
+		return err
+	}
+	if err := config.ValidateAdminListen(a.cfg.AdminListen, access); err != nil {
 		return err
 	}
 	ln, err := net.Listen("tcp", a.cfg.AdminListen)
@@ -53,6 +57,9 @@ func (a *app) serve() error {
 		fmt.Fprintf(a.err, "Listening on %s\n", a.cfg.Listen)
 	}
 	fmt.Fprintf(a.err, "Admin page on http://%s\n", a.cfg.AdminListen)
+	if access.Open() {
+		fmt.Fprintf(a.err, "Admin page accepts clients from %s over plain HTTP. Use it only on a network you trust.\n", access)
+	}
 	token, err := admin.EnsureSetupToken(ctx, a.store, a.cfg.DataDir)
 	if err != nil {
 		_ = ln.Close()
@@ -75,6 +82,7 @@ func (a *app) serve() error {
 		Listen:       a.cfg.Listen,
 		ListenLocked: a.cfg.ListenLocked,
 		AdminListen:  a.cfg.AdminListen,
+		Access:       access,
 		Version:      buildinfo.Version,
 		Updates:      update.NewClient(),
 		UpdateMode:   mode,

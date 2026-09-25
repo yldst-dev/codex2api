@@ -71,6 +71,18 @@ systemctl restart codex-gateway
 
 admin=$(sed -n 's/^CODEX_GATEWAY_ADMIN_LISTEN=//p' /etc/codex-gateway.env 2>/dev/null | tail -n 1)
 admin=${admin:-127.0.0.1:8081}
+allow=$(sed -n 's/^CODEX_GATEWAY_ADMIN_ALLOW=//p' /etc/codex-gateway.env 2>/dev/null | tail -n 1)
+port=${admin##*:}
+case "${admin%:*}" in
+  0.0.0.0|"[::]"|"")
+    if [ -n "$allow" ]; then
+      lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+      admin="${lan_ip:-127.0.0.1}:${port}"
+    else
+      admin="127.0.0.1:${port}"
+    fi
+    ;;
+esac
 token_file=/var/lib/codex-gateway/setup.token
 waited=0
 while [ "$waited" -lt 15 ]; do
@@ -104,6 +116,11 @@ else
   echo "  http://${admin}/"
 fi
 echo
-echo "From another computer, open an SSH tunnel first and use the same link:"
-echo
-echo "  ssh -L ${admin##*:}:127.0.0.1:${admin##*:} -L 1455:127.0.0.1:1455 user@this-server"
+if [ -n "$allow" ]; then
+  echo "The admin page accepts clients from ${allow} over plain HTTP."
+  echo "Use it only on a network you trust."
+else
+  echo "From another computer, open an SSH tunnel first and use the same link:"
+  echo
+  echo "  ssh -L ${port}:127.0.0.1:${port} -L 1455:127.0.0.1:1455 user@this-server"
+fi

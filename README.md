@@ -85,12 +85,32 @@ Codex 로그인 버튼을 누르면 OpenAI 로그인 창이 열리고, 끝나면
 
 보안 경계는 다음과 같습니다.
 
-- 관리 화면은 루프백 주소에만 열립니다. `CODEX_GATEWAY_ADMIN_LISTEN`에 루프백이 아닌 주소를 넣으면 시작하지 않습니다.
-- `Host`가 `127.0.0.1`, `localhost`, `::1`이 아닌 요청은 거절합니다. DNS rebinding으로 들어오는 요청을 막기 위해서입니다.
+- 관리 화면은 기본으로 루프백 주소에만 열립니다. `CODEX_GATEWAY_ADMIN_ALLOW` 없이 `CODEX_GATEWAY_ADMIN_LISTEN`에 루프백이 아닌 주소를 넣으면 시작하지 않습니다.
+- 요청을 보낸 IP가 루프백이나 허용 대역 밖이면 거절합니다.
+- `Host`가 `127.0.0.1`, `localhost`, `::1`, 또는 허용 대역 안의 IP 주소가 아니면 거절합니다. 도메인 이름은 받지 않습니다. DNS rebinding으로 들어오는 요청을 막기 위해서입니다.
 - 쓰기 요청은 JSON만 받고, 다른 출처의 `Origin`이나 `Sec-Fetch-Site: cross-site`가 붙으면 거절합니다.
 - 세션은 쿠키가 아니라 탭의 `sessionStorage`에 두고 `Authorization` 헤더로 보냅니다. 같은 기기의 다른 localhost 앱에 세션이 새지 않습니다.
 - 관리자 비밀번호는 PBKDF2-SHA256 600000회로 저장합니다. 5분 안에 10번 틀리면 잠시 막힙니다. 비밀번호를 바꾸면 다른 세션은 모두 끊깁니다.
 - 1회용 설정 링크는 `setup.token` 파일에만 있고, 비밀번호를 정하면 지워집니다. systemd 로그에는 링크를 남기지 않습니다.
+
+### LAN에서 바로 열기
+
+같은 네트워크의 PC에서 SSH 터널 없이 `http://서버IP:8081`로 열려면 `/etc/codex-gateway.env`에 두 값을 넣고 서비스를 다시 시작합니다.
+
+```bash
+CODEX_GATEWAY_ADMIN_LISTEN=0.0.0.0:8081
+CODEX_GATEWAY_ADMIN_ALLOW=192.168.0.0/24
+```
+
+```bash
+sudo systemctl restart codex-gateway
+```
+
+`CODEX_GATEWAY_ADMIN_ALLOW`에는 쉼표로 여러 대역이나 IP를 적을 수 있습니다. 사설망 대역인 `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, Tailscale의 `100.64.0.0/10`, IPv6 `fc00::/7` 안쪽만 받고, `0.0.0.0/0`처럼 인터넷이 섞인 대역은 시작을 거부합니다.
+
+이 방식은 HTTPS가 아니라서 로그인할 때 관리자 비밀번호가 네트워크에 암호화되지 않은 채 흐릅니다. 집이나 사무실처럼 믿을 수 있는 네트워크에서만 켜고, 비밀번호는 다른 곳에 쓰지 않는 값으로 정합니다. 서버에 방화벽이 있으면 허용 대역에서 8081로 들어오는 연결을 열어 둡니다.
+
+LAN 주소로 접속하면 Codex 로그인 뒤 브라우저가 PC의 `localhost:1455`로 이동해서 연결할 수 없다는 화면이 뜹니다. 그 화면의 주소 전체를 관리 화면의 입력칸에 붙여 넣으면 연결됩니다.
 
 비밀번호를 잊었으면 서버에서 새 설정 링크를 받습니다. 서비스는 다시 시작하지 않아도 됩니다.
 
@@ -137,7 +157,8 @@ journalctl -u codex-gateway-update.service
 | `CODEX_GATEWAY_LISTEN` | `127.0.0.1:8080` | 수신 주소. 값을 넣으면 관리 화면과 저장한 값보다 우선하고, 관리 화면에서 바꿀 수 없게 됩니다. |
 | `CODEX_GATEWAY_DATA_DIR` | `./data` | SQLite와 마스터 키 위치 |
 | `CODEX_GATEWAY_MASTER_KEY` | 없음 | 32바이트 키. hex 64자 또는 base64 |
-| `CODEX_GATEWAY_ADMIN_LISTEN` | `127.0.0.1:8081` | 관리 화면 주소. 루프백만 됩니다. `off`면 끕니다. |
+| `CODEX_GATEWAY_ADMIN_LISTEN` | `127.0.0.1:8081` | 관리 화면 주소. 기본은 루프백만 됩니다. `off`면 끕니다. |
+| `CODEX_GATEWAY_ADMIN_ALLOW` | 없음 | 관리 화면에 접속할 수 있는 사설망 대역. 넣으면 LAN 주소로 열 수 있습니다. |
 | `CODEX_GATEWAY_UPDATER` | 없음 | `systemd`면 웹 업데이트를 `codex-gateway-update.path`에 맡깁니다. systemd 유닛이 넣습니다. |
 
 마스터 키 우선순위는 환경 변수, 그다음 `CODEX_GATEWAY_DATA_DIR/master.key` 입니다. 둘 다 없고 `gateway.db`도 없는 첫 실행에서만 `master.key`를 만들고 권한을 `0600`으로 둡니다. 이 파일이 없으면 DB 안의 OAuth 토큰을 풀 수 없습니다.

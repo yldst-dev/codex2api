@@ -25,6 +25,11 @@ export function isLoopbackListen(listen: string): boolean {
   return host === "localhost" || host === "::1" || host.startsWith("127.")
 }
 
+export function openedOverNetwork(): boolean {
+  const host = window.location.hostname.replace(/^\[|\]$/g, "")
+  return !(host === "localhost" || host === "::1" || host.startsWith("127."))
+}
+
 export function apiBaseURL(listen: string): string {
   const { host, port } = splitHostPort(listen)
   const shown = isWildcardHost(listen) ? "서버-주소" : host.includes(":") ? `[${host}]` : host

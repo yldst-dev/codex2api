@@ -614,6 +614,7 @@ Environment:
   CODEX_GATEWAY_LISTEN      default 127.0.0.1:8080
   CODEX_GATEWAY_DATA_DIR    default ./data
   CODEX_GATEWAY_MASTER_KEY  32-byte hex or base64 key
-  CODEX_GATEWAY_ADMIN_LISTEN  default 127.0.0.1:8081, loopback only, "off" disables
+  CODEX_GATEWAY_ADMIN_LISTEN  default 127.0.0.1:8081, loopback unless ADMIN_ALLOW is set, "off" disables
+  CODEX_GATEWAY_ADMIN_ALLOW   private CIDR ranges allowed to open the admin page, e.g. 192.168.0.0/24
   CODEX_GATEWAY_UPDATER     "systemd" hands web updates to codex-gateway-update.path
 `

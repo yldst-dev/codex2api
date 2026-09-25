@@ -59,6 +59,7 @@ export type Dashboard = {
   keys: ApiKey[]
   gateway: GatewayState
   admin_listen: string
+  admin_allow: string
   data_dir: string
   update: UpdateState
 }

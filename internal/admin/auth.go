@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -85,6 +86,10 @@ func ResetPassword(ctx context.Context, st *store.Store, dataDir string) (string
 }
 
 func SetupURL(adminListen, token string) string {
+	host, port, err := net.SplitHostPort(adminListen)
+	if err == nil && (host == "" || host == "0.0.0.0" || host == "::") {
+		adminListen = net.JoinHostPort("127.0.0.1", port)
+	}
 	return "http://" + adminListen + "/#setup=" + token
 }
 

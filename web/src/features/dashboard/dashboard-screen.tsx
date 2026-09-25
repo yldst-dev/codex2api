@@ -100,7 +100,7 @@ export function DashboardScreen({ data, error, refresh }: DashboardScreenProps) 
           <UpdatePanel state={data.update} refresh={refresh} />
         </motion.div>
         <motion.div variants={item}>
-          <SecurityPanel adminListen={data.admin_listen} refresh={refresh} />
+          <SecurityPanel adminListen={data.admin_listen} adminAllow={data.admin_allow} refresh={refresh} />
         </motion.div>
       </motion.div>
     </div>

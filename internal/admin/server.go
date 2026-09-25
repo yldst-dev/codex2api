@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -48,6 +49,7 @@ type Server struct {
 	Listen       string
 	ListenLocked bool
 	AdminListen  string
+	Access       config.AdminAccess
 	Log          *slog.Logger
 	Version      string
 	Updates      *update.Client
@@ -156,11 +158,16 @@ func (s *Server) guard(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Cache-Control", "no-store")
+		remote, err := netip.ParseAddrPort(r.RemoteAddr)
+		if err != nil || !s.Access.Allows(remote.Addr()) {
+			http.Error(w, "Forbidden client.", http.StatusForbidden)
+			return
+		}
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = r.Host
 		}
-		if !config.IsLoopbackHost(host) {
+		if !s.Access.AllowsHost(host) {
 			http.Error(w, "Forbidden host.", http.StatusForbidden)
 			return
 		}
@@ -298,6 +305,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 			"locked":  s.ListenLocked,
 		},
 		"admin_listen": s.AdminListen,
+		"admin_allow":  s.Access.String(),
 		"data_dir":     s.DataDir,
 		"update":       s.updateJSON(ctx),
 	})

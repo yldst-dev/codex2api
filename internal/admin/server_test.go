@@ -63,6 +63,7 @@ func (h *harness) do(method, path, bearer string, body any, mutate ...func(*http
 	}
 	req := httptest.NewRequest(method, "http://127.0.0.1:8081"+path, reader)
 	req.Host = "127.0.0.1:8081"
+	req.RemoteAddr = "127.0.0.1:50000"
 	if method == http.MethodPost {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", "http://127.0.0.1:8081")
