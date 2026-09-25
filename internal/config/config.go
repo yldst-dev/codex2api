@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"codex-gateway/internal/store"
 )
 
 const (
@@ -82,6 +84,11 @@ func Load() (*Config, error) {
 	}
 	if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("master key: %w", err)
+	}
+	if _, err := os.Stat(filepath.Join(abs, store.DBFile)); err == nil {
+		return nil, fmt.Errorf("%s is missing but %s already exists; set %s or restore the original key file", path, store.DBFile, EnvMasterKey)
+	} else if !os.IsNotExist(err) {
+		return nil, fmt.Errorf("data dir: %w", err)
 	}
 
 	key := make([]byte, 32)

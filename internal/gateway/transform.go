@@ -24,26 +24,36 @@ func prepareBody(body []byte) ([]byte, error) {
 	if !needInstructions && !needEffort {
 		return body, nil
 	}
-	var obj map[string]any
-	if err := json.Unmarshal(body, &obj); err != nil || obj == nil {
-		return nil, errors.New("request body must be a JSON object")
-	}
 	if needInstructions {
-		obj["instructions"] = strings.TrimSpace(defaultInstructions)
+		encoded, err := marshalJSON(strings.TrimSpace(defaultInstructions))
+		if err != nil {
+			return nil, err
+		}
+		root["instructions"] = encoded
 	}
 	if needEffort {
-		reasoning, _ := obj["reasoning"].(map[string]any)
-		if reasoning == nil {
-			reasoning = map[string]any{}
-			obj["reasoning"] = reasoning
+		var reasoning map[string]json.RawMessage
+		if err := json.Unmarshal(root["reasoning"], &reasoning); err != nil || reasoning == nil {
+			return nil, errors.New("reasoning must be a JSON object")
 		}
-		reasoning["effort"] = "none"
+		reasoning["effort"] = json.RawMessage(`"none"`)
+		encoded, err := marshalJSON(reasoning)
+		if err != nil {
+			return nil, err
+		}
+		root["reasoning"] = encoded
 	}
-	out, err := json.Marshal(obj)
-	if err != nil {
+	return marshalJSON(root)
+}
+
+func marshalJSON(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
 func nonEmptyJSONString(raw json.RawMessage) bool {

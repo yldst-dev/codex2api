@@ -307,6 +307,34 @@ func TestClientCancelAndUpstreamFailure(t *testing.T) {
 	}
 }
 
+func TestOversizedUpstreamBodyIsRejected(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(bytes.Repeat([]byte("x"), maxUpstreamBody+1))
+	}))
+	defer upstream.Close()
+	_, svc, mgr := testStack(t)
+	if _, err := mgr.SaveLogin(context.Background(), &oauth.Token{
+		AccessToken:  "oauth-access-token-value",
+		RefreshToken: "oauth-refresh-token-value",
+		ExpiresAt:    time.Now().Add(time.Hour),
+		AccountID:    "acc_123",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	created, err := svc.Create(context.Background(), "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	gw := &Gateway{Tokens: mgr, Keys: svc, ResponsesURL: upstream.URL + "/backend-api/codex/responses"}
+	server := httptest.NewServer(gw.Handler())
+	defer server.Close()
+	resp := post(t, server.URL+"/v1/responses/compact", "Bearer "+created.Key, `{"model":"m","input":[],"instructions":"keep"}`)
+	if resp.status != http.StatusBadGateway || !strings.Contains(resp.body, "too large") {
+		t.Fatalf("oversized = %d %.200s", resp.status, resp.body)
+	}
+}
+
 func TestMissingOAuth(t *testing.T) {
 	_, svc, mgr := testStack(t)
 	created, err := svc.Create(context.Background(), "default")

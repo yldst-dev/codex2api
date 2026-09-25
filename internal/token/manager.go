@@ -129,6 +129,7 @@ func (m *Manager) refresh(ctx context.Context, force bool) (*store.OAuthAccount,
 }
 
 func (m *Manager) refreshLocked(ctx context.Context, force bool) (*store.OAuthAccount, error) {
+	ctx = context.WithoutCancel(ctx)
 	return withFileLock(m.lockPath, func() (*store.OAuthAccount, error) {
 		var acc *store.OAuthAccount
 		var err error
@@ -159,10 +160,7 @@ func (m *Manager) refreshLocked(ctx context.Context, force bool) (*store.OAuthAc
 			var endpoint *oauth.EndpointError
 			if errors.As(err, &endpoint) && !endpoint.Temporary {
 				_ = m.store.MarkReauth(ctx)
-				if loaded, loadErr := m.store.LoadOAuth(ctx); loadErr == nil && loaded != nil {
-					loaded.Status = store.OAuthReauth
-					m.unsaved = nil
-				}
+				m.unsaved = nil
 				return nil, ErrReauth
 			}
 			if time.Until(acc.ExpiresAt) > 0 && acc.Status != store.OAuthReauth {

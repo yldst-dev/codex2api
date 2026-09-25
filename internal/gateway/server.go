@@ -73,7 +73,7 @@ func (g *Gateway) client() *http.Client {
 					Timeout: 15 * time.Second,
 				}).DialContext,
 				TLSHandshakeTimeout:   15 * time.Second,
-				ResponseHeaderTimeout: 2 * time.Minute,
+				ResponseHeaderTimeout: 10 * time.Minute,
 				IdleConnTimeout:       90 * time.Second,
 				ExpectContinueTimeout: time.Second,
 				MaxIdleConns:          10,
@@ -235,9 +235,14 @@ func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, upstream *http
 		}
 		return
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBody))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxUpstreamBody+1))
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "api_error", "upstream response failed")
+		return
+	}
+	if len(body) > maxUpstreamBody {
+		g.logger().Warn("upstream response exceeded size limit")
+		writeError(w, http.StatusBadGateway, "api_error", "upstream response is too large")
 		return
 	}
 	body = redact(body, access)

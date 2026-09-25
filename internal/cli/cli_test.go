@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestMenuKeys(t *testing.T) {
@@ -108,5 +110,36 @@ func TestConfigAndAuthStatus(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "Not logged in.") {
 		t.Fatalf("status = %s", stdout.String())
+	}
+}
+
+func TestLoneEscapeReturnsWithoutNextKey(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Close()
+	defer w.Close()
+	if _, err := w.Write([]byte("\x1b")); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan menuKey, 1)
+	go func() {
+		key, _ := readMenuKey(r)
+		done <- key
+	}()
+	select {
+	case key := <-done:
+		if key != menuQuit {
+			t.Fatalf("key = %v", key)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("lone escape blocked until the next key")
+	}
+	if _, err := w.Write([]byte("\x1b[B")); err != nil {
+		t.Fatal(err)
+	}
+	if key, err := readMenuKey(r); err != nil || key != menuDown {
+		t.Fatalf("key = %v err %v", key, err)
 	}
 }

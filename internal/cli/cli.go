@@ -435,18 +435,24 @@ func (a *app) serverStatus() error {
 			health = resp.Status
 		}
 	}
+	oauthReady := acc != nil && acc.Status == store.OAuthActive
+	oauthState := "not logged in"
+	if acc != nil {
+		oauthState = acc.Status
+	}
 	payload := map[string]any{
-		"listen":   a.cfg.Listen,
-		"data_dir": a.cfg.DataDir,
-		"health":   health,
-		"oauth":    acc != nil,
-		"api_keys": len(keys),
+		"listen":       a.cfg.Listen,
+		"data_dir":     a.cfg.DataDir,
+		"health":       health,
+		"oauth":        oauthReady,
+		"oauth_status": oauthState,
+		"api_keys":     len(keys),
 	}
 	if a.jsonOut {
 		return a.printJSON(payload)
 	}
-	fmt.Fprintf(a.out, "Listen: %s\nData: %s\nHealth: %s\nOAuth: %s\nAPI keys: %d\n",
-		a.cfg.Listen, a.cfg.DataDir, health, yesNo(acc != nil), len(keys))
+	fmt.Fprintf(a.out, "Listen: %s\nData: %s\nHealth: %s\nOAuth: %s (%s)\nAPI keys: %d\n",
+		a.cfg.Listen, a.cfg.DataDir, health, yesNo(oauthReady), oauthState, len(keys))
 	return nil
 }
 

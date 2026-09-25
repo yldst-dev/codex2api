@@ -5,7 +5,6 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
@@ -20,6 +19,8 @@ import (
 )
 
 const Prefix = "cg_"
+
+const touchInterval = time.Minute
 
 var ErrInvalid = errors.New("invalid api key")
 
@@ -120,27 +121,25 @@ func (s *Service) Rotate(ctx context.Context, id string) (Created, error) {
 
 func (s *Service) Authenticate(ctx context.Context, presented string) (store.APIKey, error) {
 	presented = strings.TrimSpace(presented)
-	keys, err := s.store.ListAPIKeys(ctx)
+	key, err := s.store.APIKeyByHash(ctx, Hash(s.master, []byte(presented)))
 	if err != nil {
-		s.log.Warn("api key lookup failed")
-		return store.APIKey{}, ErrInvalid
-	}
-	sum := Hash(s.master, []byte(presented))
-	found := -1
-	for i := range keys {
-		if subtle.ConstantTimeCompare(keys[i].Hash, sum) == 1 && found < 0 {
-			found = i
+		if !errors.Is(err, sql.ErrNoRows) {
+			s.log.Warn("api key lookup failed")
 		}
-	}
-	if found < 0 || keys[found].Status != store.KeyActive {
 		s.log.Info("api key rejected")
 		return store.APIKey{}, ErrInvalid
 	}
-	if err := s.store.TouchAPIKey(ctx, keys[found].ID); err != nil {
-		s.log.Warn("api key last-used update failed", "key_id", keys[found].ID)
+	if key.Status != store.KeyActive {
+		s.log.Info("api key rejected")
+		return store.APIKey{}, ErrInvalid
 	}
-	keys[found].Hash = nil
-	return keys[found], nil
+	if key.LastUsedAt == nil || time.Since(*key.LastUsedAt) >= touchInterval {
+		if err := s.store.TouchAPIKey(ctx, key.ID); err != nil {
+			s.log.Warn("api key last-used update failed", "key_id", key.ID)
+		}
+	}
+	key.Hash = nil
+	return key, nil
 }
 
 func Hash(master, key []byte) []byte {

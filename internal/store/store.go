@@ -4,11 +4,15 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -17,13 +21,17 @@ import (
 )
 
 const (
-	OAuthActive = "active"
-	OAuthReauth = "reauth_required"
-	KeyActive   = "active"
-	KeyRevoked  = "revoked"
+	OAuthActive  = "active"
+	OAuthReauth  = "reauth_required"
+	KeyActive    = "active"
+	KeyRevoked   = "revoked"
+	DBFile       = "gateway.db"
+	metaKeyCheck = "master_key_check"
 )
 
 var ErrRevoked = errors.New("api key is revoked")
+
+var ErrMasterKeyMismatch = errors.New("master key does not match this data directory")
 
 type OAuthAccount struct {
 	AccessToken    string
@@ -68,8 +76,9 @@ func Open(dataDir string, masterKey []byte) (*Store, error) {
 	if err := os.Chmod(dataDir, 0o700); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(dataDir, "gateway.db")
-	db, err := sql.Open("sqlite", path)
+	path := filepath.Join(dataDir, DBFile)
+	dsn := "file:" + (&url.URL{Path: path}).EscapedPath() + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +86,10 @@ func Open(dataDir string, masterKey []byte) (*Store, error) {
 	db.SetMaxIdleConns(1)
 	s := &Store{db: db, path: path, key: append([]byte(nil), masterKey...)}
 	if err := s.init(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := s.verifyKey(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -97,9 +110,6 @@ func (s *Store) Path() string {
 
 func (s *Store) init() error {
 	_, err := s.db.Exec(`
-PRAGMA busy_timeout = 5000;
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -132,6 +142,26 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 `)
 	return err
+}
+
+func (s *Store) verifyKey(ctx context.Context) error {
+	mac := hmac.New(sha256.New, s.key)
+	_, _ = mac.Write([]byte("codex-gateway master key check"))
+	want := hex.EncodeToString(mac.Sum(nil))
+	stored, err := s.Meta(ctx, metaKeyCheck)
+	if err != nil {
+		return err
+	}
+	if stored != "" {
+		if !hmac.Equal([]byte(stored), []byte(want)) {
+			return ErrMasterKeyMismatch
+		}
+		return nil
+	}
+	if _, err := s.LoadOAuth(ctx); err != nil {
+		return ErrMasterKeyMismatch
+	}
+	return s.SetMeta(ctx, metaKeyCheck, want)
 }
 
 func (s *Store) tighten() error {
@@ -295,6 +325,14 @@ INSERT INTO api_keys (id, name, key_hash, key_prefix, status, created_at)
 VALUES (?, ?, ?, ?, ?, ?)
 `, key.ID, key.Name, key.Hash, key.Prefix, KeyActive, key.CreatedAt.Unix())
 	return err
+}
+
+func (s *Store) APIKeyByHash(ctx context.Context, hash []byte) (APIKey, error) {
+	row := s.db.QueryRowContext(ctx, `
+SELECT id, name, key_hash, key_prefix, status, created_at, last_used_at, revoked_at
+FROM api_keys WHERE key_hash = ?
+`, hash)
+	return scanKey(row)
 }
 
 func (s *Store) ListAPIKeys(ctx context.Context) ([]APIKey, error) {

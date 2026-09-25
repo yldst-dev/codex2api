@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -43,8 +44,9 @@ func (f *Flow) ServeCallback(ctx context.Context, ln net.Listener) (*Token, erro
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /auth/callback", func(w http.ResponseWriter, r *http.Request) {
-		if _, state, err := ParseCallback(r.URL.RequestURI()); err != nil || subtle.ConstantTimeCompare([]byte(state), []byte(f.State)) != 1 {
-			http.Error(w, "This login link does not match the current login. Start again from the gateway.", http.StatusBadRequest)
+		state := strings.TrimSpace(r.URL.Query().Get("state"))
+		if subtle.ConstantTimeCompare([]byte(state), []byte(f.State)) != 1 {
+			http.Error(w, "This callback does not belong to the current login.", http.StatusBadRequest)
 			return
 		}
 		if !accepted.CompareAndSwap(false, true) {

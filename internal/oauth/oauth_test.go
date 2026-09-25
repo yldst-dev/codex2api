@@ -219,3 +219,91 @@ func errorsAs(err error, target **EndpointError) bool {
 	*target = endpoint
 	return true
 }
+
+func TestForbiddenWithoutPermanentCodeIsTemporary(t *testing.T) {
+	cases := []struct {
+		body      string
+		temporary bool
+	}{
+		{`<html>blocked</html>`, true},
+		{`{"error":"invalid_grant"}`, false},
+	}
+	for _, tc := range cases {
+		err := classify(http.StatusForbidden, []byte(tc.body))
+		var endpoint *EndpointError
+		if !errorsAs(err, &endpoint) || endpoint.Temporary != tc.temporary {
+			t.Fatalf("body %s err = %#v", tc.body, err)
+		}
+	}
+}
+
+func TestExpiryFallsBackToAccessTokenClaim(t *testing.T) {
+	exp := time.Now().Add(2 * time.Hour).Unix()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  testJWT(t, exp),
+			"refresh_token": "refresh-1",
+		})
+	}))
+	defer srv.Close()
+	tok, err := NewClient(srv.URL).Refresh(context.Background(), "refresh-0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.ExpiresAt.Unix() != exp {
+		t.Fatalf("expires at %v, want %v", tok.ExpiresAt.Unix(), exp)
+	}
+}
+
+func TestCallbackWithForeignStateDoesNotEndLogin(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  "access-1",
+			"refresh_token": "refresh-1",
+			"expires_in":    3600,
+		})
+	}))
+	defer srv.Close()
+	flow, _, err := StartFlow(NewClient(srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		_, err := flow.WaitCallback(ctx)
+		result <- err
+	}()
+	base := "http://" + CallbackAddr + "/auth/callback?code=c&state="
+	var resp *http.Response
+	for i := 0; i < 50; i++ {
+		resp, err = http.Get(base + "foreign")
+		if err == nil {
+			break
+		}
+		select {
+		case err := <-result:
+			t.Skipf("callback listener unavailable: %v", err)
+		case <-time.After(20 * time.Millisecond):
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("foreign state status = %d", resp.StatusCode)
+	}
+	resp, err = http.Get(base + flow.State)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("valid callback status = %d", resp.StatusCode)
+	}
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+}

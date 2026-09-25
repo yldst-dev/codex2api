@@ -233,13 +233,19 @@ func (c *Client) post(ctx context.Context, form url.Values) (*Token, error) {
 		IDToken:      raw.IDToken,
 		ExpiresIn:    raw.ExpiresIn,
 	}
-	if raw.ExpiresIn > 0 {
-		tok.ExpiresAt = time.Now().Add(time.Duration(raw.ExpiresIn) * time.Second)
-	} else {
-		tok.ExpiresAt = time.Now()
-	}
+	tok.ExpiresAt = expiresAt(raw.ExpiresIn, raw.AccessToken)
 	applyIdentity(tok)
 	return tok, nil
+}
+
+func expiresAt(expiresIn int64, accessToken string) time.Time {
+	if expiresIn > 0 {
+		return time.Now().Add(time.Duration(expiresIn) * time.Second)
+	}
+	if claims, err := decodeClaims(accessToken); err == nil && claims.Exp > 0 {
+		return time.Unix(claims.Exp, 0)
+	}
+	return time.Now()
 }
 
 type tokenResponse struct {
@@ -290,7 +296,7 @@ func classify(status int, body []byte) error {
 	code := errorCode(body)
 	permanent := isPermanent(code)
 	switch status {
-	case http.StatusUnauthorized, http.StatusForbidden:
+	case http.StatusUnauthorized:
 		permanent = true
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		permanent = false

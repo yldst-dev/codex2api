@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -45,13 +46,35 @@ func TestOAuthRoundTripAndPermissions(t *testing.T) {
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}
-	other, err := Open(dir, []byte("abcdef0123456789abcdef0123456789"))
+	if _, err := Open(dir, []byte("abcdef0123456789abcdef0123456789")); !errors.Is(err, ErrMasterKeyMismatch) {
+		t.Fatalf("open with wrong master key err = %v", err)
+	}
+}
+
+func TestLegacyStoreWithoutKeyCheckRejectsWrongKey(t *testing.T) {
+	dir := t.TempDir()
+	st, err := Open(dir, []byte("0123456789abcdef0123456789abcdef"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer other.Close()
-	if _, err := other.LoadOAuth(context.Background()); err == nil {
-		t.Fatal("wrong master key decrypted the token")
+	if err := st.SaveOAuth(context.Background(), OAuthAccount{AccessToken: "a", RefreshToken: "b", ExpiresAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`DELETE FROM meta WHERE key = ?`, metaKeyCheck); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	if _, err := Open(dir, []byte("abcdef0123456789abcdef0123456789")); !errors.Is(err, ErrMasterKeyMismatch) {
+		t.Fatalf("err = %v", err)
+	}
+	again, err := Open(dir, []byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.Close()
+	var timeout int
+	if err := again.db.QueryRow(`PRAGMA busy_timeout`).Scan(&timeout); err != nil || timeout != 5000 {
+		t.Fatalf("busy_timeout = %d, %v", timeout, err)
 	}
 }
 

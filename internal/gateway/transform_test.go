@@ -32,3 +32,15 @@ func TestPrepareBodyPatchesOnlyWhenNeeded(t *testing.T) {
 		t.Fatalf("effort = %#v", reasoning["effort"])
 	}
 }
+
+func TestPrepareBodyKeepsUntouchedValuesVerbatim(t *testing.T) {
+	patched, err := prepareBody([]byte(`{"seed":12345678901234567890,"input":[{"role":"user","content":"a<b && c>d"}],"reasoning":{"effort":"minimal","summary":"auto"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"seed":12345678901234567890`, `"a<b && c>d"`, `"summary":"auto"`, `"effort":"none"`} {
+		if !strings.Contains(string(patched), want) {
+			t.Fatalf("missing %s in %s", want, patched)
+		}
+	}
+}

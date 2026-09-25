@@ -217,3 +217,33 @@ func openStore(t *testing.T) *store.Store {
 	t.Cleanup(func() { _ = st.Close() })
 	return st
 }
+
+func TestRotatedTokenIsSavedWhenCallerCancels(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cancel()
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"access_token":  "access-rotated",
+			"refresh_token": "refresh-rotated",
+			"expires_in":    3600,
+		})
+	}))
+	defer srv.Close()
+	st := openStore(t)
+	mgr := NewManager(st, oauth.NewClient(srv.URL))
+	if _, err := mgr.SaveLogin(context.Background(), &oauth.Token{
+		AccessToken:  "access-old",
+		RefreshToken: "refresh-old",
+		ExpiresAt:    time.Now().Add(-time.Minute),
+		AccountID:    "acc",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := mgr.AccessToken(ctx); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := st.LoadOAuth(context.Background())
+	if err != nil || saved.RefreshToken != "refresh-rotated" {
+		t.Fatalf("saved = %+v err %v", saved, err)
+	}
+}

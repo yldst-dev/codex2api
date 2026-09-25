@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sys/unix"
 	"golang.org/x/term"
 
 	"codex-gateway/internal/store"
@@ -300,24 +301,32 @@ func (a *app) paint(title string, items []string, current int, redraw bool) {
 
 func readMenuKey(f *os.File) (menuKey, error) {
 	var one [1]byte
-	_ = f.SetReadDeadline(time.Time{})
 	if _, err := f.Read(one[:]); err != nil {
 		return menuNone, err
 	}
 	if one[0] != 0x1b {
 		return classifyMenuKey(string(one[:])), nil
 	}
-	_ = f.SetReadDeadline(time.Now().Add(40 * time.Millisecond))
+	if !inputReady(f, 40*time.Millisecond) {
+		return menuQuit, nil
+	}
 	var rest [8]byte
-	n, err := f.Read(rest[:])
-	_ = f.SetReadDeadline(time.Time{})
+	n, _ := f.Read(rest[:])
 	if n == 0 {
-		if err != nil {
-			return menuQuit, nil
-		}
 		return menuQuit, nil
 	}
 	return classifyMenuKey(string(one[:]) + string(rest[:n])), nil
+}
+
+func inputReady(f *os.File, wait time.Duration) bool {
+	fds := []unix.PollFd{{Fd: int32(f.Fd()), Events: unix.POLLIN}}
+	for {
+		n, err := unix.Poll(fds, int(wait.Milliseconds()))
+		if errors.Is(err, unix.EINTR) {
+			continue
+		}
+		return err == nil && n > 0 && fds[0].Revents&unix.POLLIN != 0
+	}
 }
 
 func classifyMenuKey(seq string) menuKey {
