@@ -150,7 +150,7 @@ func (g *Gateway) responses(w http.ResponseWriter, r *http.Request) {
 	req.Host = "chatgpt.com"
 	req.ContentLength = int64(len(prepared))
 	g.authHeaders(req, access, acc)
-	req.Header.Set("version", oauth.Version)
+	req.Header.Set("version", oauth.ClientVersion())
 	req.Header.Set("OpenAI-Beta", "responses=experimental")
 	if compact {
 		req.Header.Set("Accept", "application/json")
@@ -207,7 +207,7 @@ func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) (string, *st
 func (g *Gateway) authHeaders(req *http.Request, access string, acc *store.OAuthAccount) {
 	req.Header.Set("Authorization", "Bearer "+access)
 	req.Header.Set("chatgpt-account-id", acc.AccountID)
-	req.Header.Set("User-Agent", oauth.UserAgent)
+	req.Header.Set("User-Agent", oauth.ClientUserAgent())
 	req.Header.Set("originator", oauth.Originator)
 }
 
@@ -285,7 +285,7 @@ func (g *Gateway) modelsEndpoint(r *http.Request) (string, error) {
 	q := u.Query()
 	clientVersion := strings.TrimSpace(r.URL.Query().Get("client_version"))
 	if clientVersion == "" {
-		clientVersion = oauth.Version
+		clientVersion = oauth.ClientVersion()
 	}
 	q.Set("client_version", clientVersion)
 	u.RawQuery = q.Encode()

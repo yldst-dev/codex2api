@@ -160,7 +160,7 @@ export function DashboardScreen({ data, error, refresh }: DashboardScreenProps) 
             <GatewayPanel gateway={data.gateway} dataDir={data.data_dir} refresh={refresh} />
           </Panel>
           <Panel value="update">
-            <UpdatePanel state={data.update} refresh={refresh} />
+            <UpdatePanel state={data.update} codex={data.codex} refresh={refresh} />
           </Panel>
           <Panel value="admin">
             <SecurityPanel adminListen={data.admin_listen} adminAllow={data.admin_allow} refresh={refresh} />

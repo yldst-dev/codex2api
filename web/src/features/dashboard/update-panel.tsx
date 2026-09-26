@@ -11,12 +11,20 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Field, FieldContent, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
 import { useAction } from "@/hooks/use-action"
-import { api, type UpdateState } from "@/lib/api"
+import { Facts } from "@/components/facts"
+import { Separator } from "@/components/ui/separator"
+import { api, type CodexClientState, type UpdateState } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 
 const busyStatuses = new Set(["installing", "restarting", "requested"])
 
-export function UpdatePanel({ state, refresh }: { state: UpdateState; refresh: () => Promise<void> }) {
+type UpdatePanelProps = {
+  state: UpdateState
+  codex: CodexClientState
+  refresh: () => Promise<void>
+}
+
+export function UpdatePanel({ state, codex, refresh }: UpdatePanelProps) {
   const { busy, run } = useAction(refresh)
   const working = busyStatuses.has(state.status)
   const latest = state.latest
@@ -133,6 +141,31 @@ export function UpdatePanel({ state, refresh }: { state: UpdateState; refresh: (
             <RefreshCwIcon className={busy === "check" ? "animate-spin" : undefined} />
             업데이트 확인
           </Button>
+        </div>
+
+        <Separator />
+
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">Codex 클라이언트 버전</p>
+            <p className="text-sm text-muted-foreground">
+              업스트림에 보내는 Codex 버전입니다. GitHub의 최신 Codex 릴리스를 6시간마다 확인해서 코드 수정이나 재시작 없이 맞춥니다.
+            </p>
+          </div>
+          <Facts
+            items={[
+              { term: "지금 쓰는 버전", value: <span className="font-mono text-xs">{codex.version}</span> },
+              { term: "기본 버전", value: <span className="font-mono text-xs">{codex.builtin}</span> },
+              { term: "마지막 확인", value: codex.checked_at ? formatDate(codex.checked_at) : "시작 후 10초 안에 확인합니다" },
+            ]}
+          />
+          {codex.error && (
+            <Alert variant="destructive">
+              <TriangleAlertIcon />
+              <AlertTitle>Codex 버전을 확인하지 못했습니다</AlertTitle>
+              <AlertDescription>{codex.error} 마지막으로 받은 버전을 계속 씁니다.</AlertDescription>
+            </Alert>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -52,6 +52,13 @@ export type UpdateState = {
   latest: { tag: string; url: string; published_at: string } | null
 }
 
+export type CodexClientState = {
+  version: string
+  builtin: string
+  checked_at?: string
+  error?: string
+}
+
 export type Dashboard = {
   authenticated: true
   account: Account | null
@@ -62,6 +69,7 @@ export type Dashboard = {
   admin_allow: string
   data_dir: string
   update: UpdateState
+  codex: CodexClientState
 }
 
 export type AdminState =

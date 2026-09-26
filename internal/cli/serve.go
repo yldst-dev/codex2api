@@ -14,6 +14,7 @@ import (
 
 	"codex-gateway/internal/admin"
 	"codex-gateway/internal/buildinfo"
+	"codex-gateway/internal/codexversion"
 	"codex-gateway/internal/config"
 	"codex-gateway/internal/gateway"
 	"codex-gateway/internal/oauth"
@@ -30,6 +31,8 @@ func (a *app) serve() error {
 		defer cancel()
 		_ = runner.Shutdown(shutCtx)
 	}()
+	codex := &codexversion.Watcher{Store: a.store}
+	go codex.Run(ctx)
 
 	if a.cfg.AdminListen == "" {
 		if err := runner.Start(a.cfg.Listen); err != nil {
@@ -84,6 +87,7 @@ func (a *app) serve() error {
 		AdminListen:  a.cfg.AdminListen,
 		Access:       access,
 		Version:      buildinfo.Version,
+		Codex:        codex,
 		Updates:      update.NewClient(),
 		UpdateMode:   mode,
 		Executable:   exe,

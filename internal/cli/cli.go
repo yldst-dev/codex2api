@@ -18,6 +18,7 @@ import (
 
 	"codex-gateway/internal/apikey"
 	"codex-gateway/internal/buildinfo"
+	"codex-gateway/internal/codexversion"
 	"codex-gateway/internal/config"
 	"codex-gateway/internal/oauth"
 	"codex-gateway/internal/store"
@@ -91,6 +92,10 @@ func openApp(stdin io.Reader, stdout, stderr io.Writer, jsonOut bool) (*app, err
 	}
 	st, err := store.Open(cfg.DataDir, cfg.MasterKey)
 	if err != nil {
+		return nil, err
+	}
+	if err := codexversion.Load(context.Background(), st); err != nil {
+		_ = st.Close()
 		return nil, err
 	}
 	if strings.TrimSpace(cfg.Listen) == "" {
@@ -471,12 +476,13 @@ func (a *app) serverStatus() error {
 		"oauth":        oauthReady,
 		"oauth_status": oauthState,
 		"api_keys":     len(keys),
+		"codex_client": oauth.ClientVersion(),
 	}
 	if a.jsonOut {
 		return a.printJSON(payload)
 	}
-	fmt.Fprintf(a.out, "Listen: %s\nData: %s\nHealth: %s\nOAuth: %s (%s)\nAPI keys: %d\n",
-		a.cfg.Listen, a.cfg.DataDir, health, yesNo(oauthReady), oauthState, len(keys))
+	fmt.Fprintf(a.out, "Listen: %s\nData: %s\nHealth: %s\nOAuth: %s (%s)\nAPI keys: %d\nCodex client: %s\n",
+		a.cfg.Listen, a.cfg.DataDir, health, yesNo(oauthReady), oauthState, len(keys), oauth.ClientVersion())
 	return nil
 }
 

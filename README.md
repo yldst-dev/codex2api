@@ -297,16 +297,21 @@ POST /backend-api/codex/responses/compact
 
 클라이언트 인증은 `Authorization: Bearer cg_...` 만 받습니다. 쿼리 문자열의 API Key는 거절합니다.
 
-게이트웨이는 그 키를 OpenAI에 보내지 않습니다. 저장된 OAuth access token으로 `https://chatgpt.com/backend-api/codex/responses`에 요청합니다. 계정 헤더는 `chatgpt-account-id` 입니다. `User-Agent`, `originator`, `version`은 아래 Codex 클라이언트 버전을 사용합니다.
+게이트웨이는 그 키를 OpenAI에 보내지 않습니다. 저장된 OAuth access token으로 `https://chatgpt.com/backend-api/codex/responses`에 요청합니다. 계정 헤더는 `chatgpt-account-id` 입니다. `User-Agent`, `originator`, `version`은 아래처럼 Codex 클라이언트 버전을 씁니다.
 
 ```text
-User-Agent: codex-tui/0.157.1 (Ubuntu 22.4.0; x86_64) xterm-256color
+User-Agent: codex-tui/<Codex 버전> (Ubuntu 22.4.0; x86_64) xterm-256color
 originator: codex-tui
-version: 0.157.1
+version: <Codex 버전>
 OpenAI-Beta: responses=experimental
 ```
 
-이 버전은 [openai/codex](https://github.com/openai/codex)의 최신 안정 릴리스를 따릅니다. GitHub Actions `.github/workflows/codex-version.yml`이 매일 00:17 KST에 latest 릴리스를 확인하고, 숫자가 다르면 `internal/oauth/oauth.go`와 이 문서의 버전 표기만 고친 뒤 기본 브랜치에 커밋합니다. `0.157.0-alpha.1` 같은 사전 릴리스는 넣지 않습니다. 기본 브랜치가 Actions의 push를 막으면 이 자동 커밋은 실패합니다.
+Codex 버전은 코드 수정이나 릴리스 없이 실행 중에 자동으로 맞춰집니다. `server start`는 시작하고 10초 뒤, 그 뒤로 6시간마다 [openai/codex](https://github.com/openai/codex)의 최신 릴리스(`https://api.github.com/repos/openai/codex/releases/latest`)를 확인합니다. 새 버전이면 그 자리에서 바로 쓰고, 데이터 디렉터리의 DB에 저장해서 재시작한 뒤에도 유지합니다. CLI 명령도 저장된 버전을 씁니다.
+
+- `0.157.1`처럼 `X.Y.Z` 형태의 정식 버전만 받습니다. `0.158.0-alpha.1` 같은 사전 릴리스는 쓰지 않습니다.
+- 실행 파일에 들어 있는 기본 버전(`internal/oauth/oauth.go`의 `Version`)보다 낮아지지 않고, 올라가기만 합니다.
+- GitHub 확인이 실패하면 마지막으로 받은 버전을 계속 씁니다.
+- 지금 쓰는 버전은 관리 화면 업데이트 탭이나 `codex-gateway server status`의 `Codex client`에서 봅니다.
 
 `/responses`의 `Accept`는 `text/event-stream` 입니다. `/responses/compact`만 `application/json` 입니다. 클라이언트가 보낸 `session_id`, `conversation_id`, `x-codex-*` 일부는 그대로 전달합니다. `instructions`가 비어 있으면 sub2api의 기본 Codex instructions를 넣습니다. `reasoning.effort`가 `minimal`이면 `none`으로 바꿉니다. 고칠 것이 없으면 본문을 그대로 보냅니다. 고칠 때도 바꾼 필드 말고는 값을 그대로 두며, 최상위 키 순서와 공백만 달라질 수 있습니다.
 

@@ -21,6 +21,7 @@ import (
 	"unicode/utf8"
 
 	"codex-gateway/internal/apikey"
+	"codex-gateway/internal/codexversion"
 	"codex-gateway/internal/config"
 	"codex-gateway/internal/gateway"
 	"codex-gateway/internal/oauth"
@@ -54,6 +55,7 @@ type Server struct {
 	Access       config.AdminAccess
 	Log          *slog.Logger
 	Version      string
+	Codex        *codexversion.Watcher
 	Updates      *update.Client
 	UpdateMode   string
 	Executable   string
@@ -312,6 +314,7 @@ func (s *Server) state(w http.ResponseWriter, r *http.Request) {
 		"admin_allow":  s.Access.String(),
 		"data_dir":     s.DataDir,
 		"update":       s.updateJSON(ctx),
+		"codex":        s.codexJSON(),
 	})
 }
 
@@ -714,6 +717,19 @@ func (s *Server) logger() *slog.Logger {
 func (s *Server) internal(w http.ResponseWriter, err error) {
 	s.logger().Error("admin request failed", "err", err)
 	writeError(w, http.StatusInternalServerError, "서버에서 처리하지 못했습니다. 로그를 확인해 주세요.")
+}
+
+func (s *Server) codexJSON() map[string]any {
+	out := map[string]any{"version": oauth.ClientVersion(), "builtin": oauth.Version}
+	if s.Codex == nil {
+		return out
+	}
+	st := s.Codex.Status()
+	out["error"] = st.Error
+	if !st.CheckedAt.IsZero() {
+		out["checked_at"] = st.CheckedAt.UTC().Format(time.RFC3339)
+	}
+	return out
 }
 
 func accountJSON(acc *store.OAuthAccount) map[string]any {
