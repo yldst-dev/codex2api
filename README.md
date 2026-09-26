@@ -421,6 +421,38 @@ curl -N http://127.0.0.1:8080/v1/responses \
 
 `reasoning.effort`는 생략할 수 있습니다. 생략하면 게이트웨이가 값을 채우지 않고 업스트림 기본값을 씁니다. `none`과 `low`는 확인된 값입니다. `minimal`만 전달 전에 `none`으로 바뀝니다.
 
+### fast 모드
+
+요청 본문에 `"service_tier": "priority"`를 넣으면 Codex fast 모드로 처리됩니다. Codex CLI의 `/fast on`과 같은 기능이고, 게이트웨이는 이 값을 그대로 넘기므로 따로 켤 설정은 없습니다.
+
+```bash
+curl -N http://127.0.0.1:8080/v1/responses \
+  -H "Authorization: Bearer $CODEX_GATEWAY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "MODEL_NAME",
+    "store": false,
+    "stream": true,
+    "service_tier": "priority",
+    "input": [{"role": "user", "content": "안녕"}]
+  }'
+```
+
+| `service_tier` | 결과 |
+| --- | --- |
+| 넣지 않음, `"default"` | 표준 속도 |
+| `"priority"` | fast 모드 |
+| `"fast"`, `"flex"`, `"auto"` 등 | `400 {"detail":"Unsupported service_tier: ..."}` |
+
+일반 OpenAI API는 `"fast"`도 받지만, Codex 백엔드는 `"priority"`만 받습니다.
+
+- 비용: ChatGPT 요금제의 Codex 사용량을 표준의 2.5배 씁니다. Plus와 Pro 요금제 기능입니다. 자세한 기준은 [Codex 속도 문서](https://learn.chatgpt.com/codex/agent-configuration/speed)에 있습니다.
+- 속도: 첫 글자가 나오는 시간은 거의 같고, 글자가 나오는 속도가 빨라집니다. 2026-09-27에 80개 숫자를 출력하게 해서 표준과 번갈아 4번씩 잰 중앙값은 `gpt-6-astra`가 6.10초에서 3.98초(33에서 61 토큰/초), `gpt-5.6-luna`가 4.14초에서 2.92초(54에서 79 토큰/초)였습니다.
+- 지원 모델: `GET /models`의 각 모델 `service_tiers`에 `"priority"`가 있으면 지원합니다. 없는 모델(예: `gpt-daybreak-blue-latest`)은 `"priority"`를 보내도 오류 없이 표준으로 처리됩니다.
+- 확인: 응답의 `service_tier`는 fast로 처리돼도 `default`로 옵니다. 응답만 보고 fast 적용 여부를 알 수는 없습니다.
+
+사용량을 많이 쓰므로 모든 요청에 켜기보다 빠른 답이 필요한 요청에만 넣는 편이 좋습니다. 게이트웨이는 키별로 fast 모드를 막지 않으므로, API 키를 가진 클라이언트는 누구나 켤 수 있습니다.
+
 같은 본문을 받는 별칭은 다음입니다.
 
 ```text
