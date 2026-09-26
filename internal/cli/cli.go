@@ -289,7 +289,7 @@ func (a *app) key(args []string) error {
 		if a.termOK {
 			return a.keyMenu()
 		}
-		return fmt.Errorf("usage: codex-gateway key create|list|revoke|rotate")
+		return fmt.Errorf("usage: codex-gateway key create|list|revoke|rotate|delete")
 	}
 	switch args[0] {
 	case "create":
@@ -371,6 +371,18 @@ func (a *app) key(args []string) error {
 			return a.printJSON(map[string]any{"id": args[1], "revoked": true})
 		}
 		fmt.Fprintf(a.out, "API key revoked: %s\n", args[1])
+		return nil
+	case "delete":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: codex-gateway key delete <id>")
+		}
+		if err := a.keys.Delete(context.Background(), args[1]); err != nil {
+			return err
+		}
+		if a.jsonOut {
+			return a.printJSON(map[string]any{"id": args[1], "deleted": true})
+		}
+		fmt.Fprintf(a.out, "API key deleted: %s\n", args[1])
 		return nil
 	case "rotate":
 		if len(args) == 1 {
@@ -602,6 +614,7 @@ Usage:
   codex-gateway key list [--json]
   codex-gateway key revoke <id> [--json]
   codex-gateway key rotate <id> [--json]
+  codex-gateway key delete <id> [--json]
   codex-gateway server start
   codex-gateway server status [--json]
   codex-gateway config show [--json]

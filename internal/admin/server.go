@@ -128,6 +128,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/keys", s.authed(s.createKey))
 	mux.HandleFunc("POST /api/keys/{id}/rotate", s.authed(s.rotateKey))
 	mux.HandleFunc("POST /api/keys/{id}/revoke", s.authed(s.revokeKey))
+	mux.HandleFunc("POST /api/keys/{id}/delete", s.authed(s.deleteKey))
+	mux.HandleFunc("POST /api/keys/purge", s.authed(s.purgeKeys))
 	mux.HandleFunc("POST /api/listen", s.authed(s.setListen))
 	mux.HandleFunc("POST /api/update/check", s.authed(s.updateCheck))
 	mux.HandleFunc("POST /api/update/apply", s.authed(s.updateApply))
@@ -623,6 +625,29 @@ func (s *Server) revokeKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) deleteKey(w http.ResponseWriter, r *http.Request) {
+	err := s.Keys.Delete(r.Context(), r.PathValue("id"))
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case errors.Is(err, apikey.ErrStillActive):
+		writeError(w, http.StatusConflict, "사용 중인 키는 지울 수 없습니다. 먼저 폐기해 주세요.")
+	case errors.Is(err, apikey.ErrNotFound):
+		writeError(w, http.StatusNotFound, "키를 찾을 수 없습니다.")
+	default:
+		s.internal(w, err)
+	}
+}
+
+func (s *Server) purgeKeys(w http.ResponseWriter, r *http.Request) {
+	n, err := s.Keys.DeleteRevoked(r.Context())
+	if err != nil {
+		s.internal(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"deleted": n})
 }
 
 func (s *Server) setListen(w http.ResponseWriter, r *http.Request) {

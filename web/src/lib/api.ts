@@ -149,6 +149,9 @@ export const api = {
   applyUpdate: () => request<{ update: UpdateState }>("POST", "/api/update/apply"),
   setAutoUpdate: (enabled: boolean) =>
     request<{ update: UpdateState }>("POST", "/api/update/auto", { enabled }),
+  deleteKey: (id: string) =>
+    request<{ ok: boolean }>("POST", `/api/keys/${encodeURIComponent(id)}/delete`),
+  purgeKeys: () => request<{ deleted: number }>("POST", "/api/keys/purge"),
   setListen: (listen: string) =>
     request<{ listen: string; running: boolean }>("POST", "/api/listen", { listen }),
 }

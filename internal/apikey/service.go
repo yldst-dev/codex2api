@@ -24,6 +24,10 @@ const touchInterval = time.Minute
 
 var ErrInvalid = errors.New("invalid api key")
 
+var ErrNotFound = errors.New("api key not found")
+
+var ErrStillActive = errors.New("revoke the api key before deleting it")
+
 type Service struct {
 	store  *store.Store
 	master []byte
@@ -83,6 +87,21 @@ func (s *Service) Revoke(ctx context.Context, id string) error {
 		return fmt.Errorf("api key not found")
 	}
 	return err
+}
+
+func (s *Service) Delete(ctx context.Context, id string) error {
+	err := s.store.DeleteAPIKey(ctx, strings.TrimSpace(id))
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return ErrNotFound
+	case errors.Is(err, store.ErrKeyActive):
+		return ErrStillActive
+	}
+	return err
+}
+
+func (s *Service) DeleteRevoked(ctx context.Context) (int64, error) {
+	return s.store.DeleteRevokedAPIKeys(ctx)
 }
 
 func (s *Service) Rotate(ctx context.Context, id string) (Created, error) {

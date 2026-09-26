@@ -31,6 +31,8 @@ const (
 
 var ErrRevoked = errors.New("api key is revoked")
 
+var ErrKeyActive = errors.New("api key is still active")
+
 var ErrMasterKeyMismatch = errors.New("master key does not match this data directory")
 
 type OAuthAccount struct {
@@ -397,6 +399,34 @@ WHERE id = ?
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (s *Store) DeleteAPIKey(ctx context.Context, id string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM api_keys WHERE id = ? AND status = ?`, id, KeyRevoked)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n > 0 {
+		return nil
+	}
+	var status string
+	err = s.db.QueryRowContext(ctx, `SELECT status FROM api_keys WHERE id = ?`, id).Scan(&status)
+	if err != nil {
+		return err
+	}
+	return ErrKeyActive
+}
+
+func (s *Store) DeleteRevokedAPIKeys(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM api_keys WHERE status = ?`, KeyRevoked)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func (s *Store) RotateAPIKey(ctx context.Context, id string, hash []byte, prefix string) error {

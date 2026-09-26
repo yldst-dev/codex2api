@@ -73,11 +73,11 @@ sudo install -m 0755 codex-gateway /usr/local/bin/codex-gateway
 ssh -L 8081:127.0.0.1:8081 -L 1455:127.0.0.1:1455 user@server
 ```
 
-관리 화면에서 하는 일은 다음과 같습니다.
+관리 화면은 왼쪽 탭(모바일에서는 위쪽 탭)으로 Codex 계정, API 키, 게이트웨이, 업데이트, 관리자를 나눠 보여 줍니다. 하는 일은 다음과 같습니다.
 
 - 관리자 비밀번호 정하기와 바꾸기
 - Codex 로그인, 토큰 새로 받기, 연결 해제
-- API 키 만들기, 재발급, 폐기. 새 키는 만든 직후 한 번만 보입니다.
+- API 키 만들기, 재발급, 폐기. 새 키는 만든 직후 한 번만 보입니다. 사용 중과 폐기됨 목록을 나눠 보여 주고, 폐기한 키는 하나씩 또는 한꺼번에 목록에서 지울 수 있습니다.
 - 게이트웨이 수신 주소 바꾸기. 새 주소를 먼저 연 뒤 옛 주소를 닫으므로 재시작이 필요 없습니다.
 - 새 버전 확인과 업데이트, 자동 업데이트 켜고 끄기
 
@@ -258,9 +258,10 @@ codex-gateway key list
 codex-gateway key create --name ci --json
 codex-gateway key rotate KEY_ID
 codex-gateway key revoke KEY_ID
+codex-gateway key delete KEY_ID
 ```
 
-`KEY_ID`는 `key list`의 ID 열입니다. 메뉴에서는 폐기와 재발급도 목록에서 고르므로 ID를 치지 않아도 됩니다. 재발급은 같은 ID의 새 평문을 한 번 출력하고 이전 평문은 즉시 무효가 됩니다. 이미 폐기한 키는 재발급되지 않습니다.
+`KEY_ID`는 `key list`의 ID 열입니다. 메뉴에서는 폐기와 재발급도 목록에서 고르므로 ID를 치지 않아도 됩니다. 재발급은 같은 ID의 새 평문을 한 번 출력하고 이전 평문은 즉시 무효가 됩니다. 이미 폐기한 키는 재발급되지 않습니다. `key delete`는 폐기한 키만 목록에서 지웁니다. 사용 중인 키는 먼저 폐기해야 합니다.
 
 `--json`은 스크립트용입니다. 평문은 `key create`와 `key rotate`의 JSON에만 들어 있습니다. `key list --json`에는 없습니다.
 
@@ -311,7 +312,7 @@ OpenAI-Beta: responses=experimental
 
 `GET /v1/models`는 ChatGPT Codex 모델 목록을 OpenAI list 형태로 바꿉니다. `GET /models`와 `GET /backend-api/codex/models`는 업스트림 JSON을 그대로 돌려줍니다. 모델 이름은 하드코딩하지 않습니다.
 
-SSE 응답은 업스트림에서 읽는 대로 클라이언트에 보내고 각 조각마다 flush 합니다. 클라이언트가 끊으면 업스트림 요청도 취소됩니다. 본문 상한은 32MB, 헤더 상한은 1MB 입니다. 스트리밍이 아닌 업스트림 응답이 32MB를 넘으면 잘라서 보내지 않고 `502`를 돌려줍니다. 업스트림으로의 리다이렉트는 따라가지 않고, TLS 검증을 끄지 않습니다.
+SSE 응답은 업스트림에서 읽는 대로 클라이언트에 보내고 각 조각마다 flush 합니다. Codex 업스트림은 스트리밍 응답에 `Content-Type`을 붙이지 않을 때가 있어서, `/responses`의 성공 응답은 타입이 비었거나 `text/plain`이어도 스트리밍으로 보고 `Content-Type: text/event-stream`을 붙여 보냅니다. JSON 성공 응답과 오류 응답, `/compact`는 모아서 한 번에 보냅니다. 클라이언트가 끊으면 업스트림 요청도 취소됩니다. 본문 상한은 32MB, 헤더 상한은 1MB 입니다. 스트리밍이 아닌 업스트림 응답이 32MB를 넘으면 잘라서 보내지 않고 `502`를 돌려줍니다. 업스트림으로의 리다이렉트는 따라가지 않고, TLS 검증을 끄지 않습니다.
 
 access token은 만료 3분 전에 refresh token으로 갱신합니다. 동시에 여러 요청이 들어와도 프로세스 안에서는 mutex로, 프로세스 사이에서는 `refresh.lock`으로 갱신을 한 번만 합니다. 새 refresh token이 오면 access token과 함께 한 트랜잭션에 저장합니다. 응답에 refresh token이 없으면 기존 값을 유지합니다.
 
