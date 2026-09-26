@@ -166,7 +166,7 @@ func (g *Gateway) responses(w http.ResponseWriter, r *http.Request) {
 	if req.Header.Get("x-codex-beta-features") == "" {
 		req.Header.Set("x-codex-beta-features", "remote_compaction_v2")
 	}
-	g.forward(w, r, req, access, true, false)
+	g.forward(w, r, req, access, !compact, false)
 }
 
 func (g *Gateway) authorize(w http.ResponseWriter, r *http.Request) (string, *store.OAuthAccount, bool) {
@@ -227,8 +227,15 @@ func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, upstream *http
 		w.WriteHeader(resp.StatusCode)
 		return
 	}
-	stream := allowStream && strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream")
+	stream := allowStream && resp.StatusCode >= 200 && resp.StatusCode < 300 && streamable(resp.Header.Get("Content-Type"))
 	if stream {
+		if !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream") {
+			w.Header().Set("Content-Type", "text/event-stream")
+		}
+		if w.Header().Get("Cache-Control") == "" {
+			w.Header().Set("Cache-Control", "no-cache")
+		}
+		w.Header().Set("X-Accel-Buffering", "no")
 		w.WriteHeader(resp.StatusCode)
 		if err := streamCopy(w, resp.Body); err != nil && r.Context().Err() == nil {
 			g.logger().Warn("upstream stream copy failed")
@@ -252,6 +259,11 @@ func (g *Gateway) forward(w http.ResponseWriter, r *http.Request, upstream *http
 	}
 	w.WriteHeader(resp.StatusCode)
 	_, _ = w.Write(body)
+}
+
+func streamable(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	return ct == "" || strings.Contains(ct, "text/event-stream") || strings.HasPrefix(ct, "text/plain")
 }
 
 func (g *Gateway) responsesBase() string {
