@@ -1,11 +1,20 @@
 import { CheckIcon, CopyIcon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type RefObject } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { copyText, selectContents } from "@/lib/clipboard"
 
-export function CopyButton({ value, label = "복사" }: { value: string; label?: string }) {
+type CopyButtonProps = {
+  value: string
+  label?: string
+  selectTarget?: RefObject<HTMLElement | null>
+}
+
+const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘C" : "Ctrl+C"
+
+export function CopyButton({ value, label = "복사", selectTarget }: CopyButtonProps) {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
@@ -15,12 +24,12 @@ export function CopyButton({ value, label = "복사" }: { value: string; label?:
   }, [copied])
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value)
+    if (await copyText(value)) {
       setCopied(true)
-    } catch {
-      toast.error("복사하지 못했습니다. 직접 선택해서 복사해 주세요.")
+      return
     }
+    selectContents(selectTarget?.current ?? null)
+    toast.error(`자동 복사가 막혀 있어 값을 선택해 두었습니다. ${shortcut}로 복사해 주세요.`)
   }
 
   return (

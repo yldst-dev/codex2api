@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"mime"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"codex-gateway/internal/apikey"
 	"codex-gateway/internal/config"
@@ -599,12 +601,18 @@ func (s *Server) createKey(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if strings.TrimSpace(body.Name) == "" {
-		body.Name = "default"
+	name := strings.TrimSpace(body.Name)
+	switch {
+	case name == "":
+		writeError(w, http.StatusBadRequest, "키 이름을 입력해 주세요.")
+		return
+	case utf8.RuneCountInString(name) > apikey.MaxNameLength:
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("키 이름은 %d자까지 쓸 수 있습니다.", apikey.MaxNameLength))
+		return
 	}
-	created, err := s.Keys.Create(r.Context(), body.Name)
+	created, err := s.Keys.Create(r.Context(), name)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "키 이름에 쓸 수 없는 문자가 있습니다.")
 		return
 	}
 	writeJSON(w, http.StatusOK, createdJSON(created))

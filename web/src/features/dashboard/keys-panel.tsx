@@ -1,6 +1,6 @@
 import { KeyRoundIcon, PlusIcon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
 import { ConfirmAction } from "@/components/confirm-action"
@@ -34,6 +34,7 @@ export function KeysPanel({ keys, listen, hasAccount, refresh }: KeysPanelProps)
   const [name, setName] = useState("")
   const [revealed, setRevealed] = useState<CreatedKey | null>(null)
   const [view, setView] = useState<"active" | "revoked">("active")
+  const keyText = useRef<HTMLElement>(null)
 
   const newestFirst = (a: ApiKey, b: ApiKey) => b.created_at.localeCompare(a.created_at)
   const active = keys.filter((k) => k.status === "active").sort(newestFirst)
@@ -41,10 +42,13 @@ export function KeysPanel({ keys, listen, hasAccount, refresh }: KeysPanelProps)
     .filter((k) => k.status === "revoked")
     .sort((a, b) => (b.revoked_at ?? "").localeCompare(a.revoked_at ?? ""))
 
+  const trimmed = name.trim()
+
   const create = (event: FormEvent) => {
     event.preventDefault()
+    if (!trimmed) return
     void run("create", async () => {
-      const created = await api.createKey(name.trim() || "default")
+      const created = await api.createKey(trimmed)
       setRevealed(created)
       setName("")
       setView("active")
@@ -70,12 +74,13 @@ export function KeysPanel({ keys, listen, hasAccount, refresh }: KeysPanelProps)
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={create}>
           <Input
             aria-label="키 이름"
-            placeholder="키 이름 (비우면 default)"
+            placeholder="키 이름 (예: telegram-bot)"
             maxLength={64}
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <Button type="submit" disabled={busy !== null}>
+          <Button type="submit" disabled={busy !== null || trimmed === ""}>
             <PlusIcon />
             키 만들기
           </Button>
@@ -96,11 +101,14 @@ export function KeysPanel({ keys, listen, hasAccount, refresh }: KeysPanelProps)
                 <AlertTitle>{revealed.name} 키가 준비되었습니다</AlertTitle>
                 <AlertDescription className="flex flex-col gap-3">
                   <span>이 값은 지금 한 번만 보입니다. 바로 안전한 곳에 저장해 주세요.</span>
-                  <code className="block rounded-md bg-muted px-3 py-2 font-mono text-xs break-all text-foreground select-all">
+                  <code
+                    ref={keyText}
+                    className="block rounded-md bg-muted px-3 py-2 font-mono text-xs break-all text-foreground select-all"
+                  >
                     {revealed.key}
                   </code>
                   <span className="flex flex-wrap gap-2">
-                    <CopyButton value={revealed.key} label="키 복사" />
+                    <CopyButton value={revealed.key} label="키 복사" selectTarget={keyText} />
                     <Button variant="ghost" size="sm" onClick={() => setRevealed(null)}>
                       저장했습니다
                     </Button>

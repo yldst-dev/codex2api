@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"codex-gateway/internal/store"
 )
@@ -21,6 +22,8 @@ import (
 const Prefix = "cg_"
 
 const touchInterval = time.Minute
+
+const MaxNameLength = 64
 
 var ErrInvalid = errors.New("invalid api key")
 
@@ -189,7 +192,7 @@ func cleanName(name string) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("api key name is required")
 	}
-	if len(name) > 64 {
+	if utf8.RuneCountInString(name) > MaxNameLength {
 		return "", fmt.Errorf("api key name is too long")
 	}
 	for _, r := range name {

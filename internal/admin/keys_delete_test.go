@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,32 @@ func TestDeleteOnlyRevokedKeys(t *testing.T) {
 	rec, out = h.do(http.MethodPost, "/api/keys/purge", session, map[string]string{})
 	if rec.Code != http.StatusOK || out["deleted"] != float64(0) {
 		t.Fatalf("second purge = %d %v", rec.Code, out)
+	}
+}
+
+func TestCreateKeyRequiresName(t *testing.T) {
+	h := newHarness(t)
+	session := h.setup("correct horse")
+	for _, name := range []string{"", "   ", "\t"} {
+		rec, out := h.do(http.MethodPost, "/api/keys", session, map[string]string{"name": name})
+		if rec.Code != http.StatusBadRequest || out["error"] != "키 이름을 입력해 주세요." {
+			t.Fatalf("name %q = %d %v", name, rec.Code, out)
+		}
+	}
+	rec, _ := h.do(http.MethodPost, "/api/keys", session, map[string]any{})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("missing name = %d", rec.Code)
+	}
+	long := strings.Repeat("가", 65)
+	if rec, _ := h.do(http.MethodPost, "/api/keys", session, map[string]string{"name": long}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("65 chars = %d", rec.Code)
+	}
+	rec, out := h.do(http.MethodPost, "/api/keys", session, map[string]string{"name": "  " + strings.Repeat("가", 64) + " "})
+	if rec.Code != http.StatusOK || out["name"] != strings.Repeat("가", 64) {
+		t.Fatalf("64 Korean chars = %d %v", rec.Code, out["name"])
+	}
+	keys, _ := h.srv.Keys.List(context.Background())
+	if len(keys) != 1 {
+		t.Fatalf("keys created = %d", len(keys))
 	}
 }
