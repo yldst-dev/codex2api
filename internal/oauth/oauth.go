@@ -33,9 +33,9 @@ const (
 	Scope        = "openid profile email offline_access"
 	RefreshScope = "openid profile email"
 
-	UserAgent  = "codex-tui/0.157.0 (Ubuntu 22.4.0; x86_64) xterm-256color"
+	UserAgent  = "codex-tui/0.157.1 (Ubuntu 22.4.0; x86_64) xterm-256color"
 	Originator = "codex-tui"
-	Version    = "0.157.0"
+	Version    = "0.157.1"
 	MinVersion = "0.144.0"
 
 	CallbackAddr = "127.0.0.1:1455"

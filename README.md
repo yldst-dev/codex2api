@@ -300,9 +300,9 @@ POST /backend-api/codex/responses/compact
 게이트웨이는 그 키를 OpenAI에 보내지 않습니다. 저장된 OAuth access token으로 `https://chatgpt.com/backend-api/codex/responses`에 요청합니다. 계정 헤더는 `chatgpt-account-id` 입니다. `User-Agent`, `originator`, `version`은 아래 Codex 클라이언트 버전을 사용합니다.
 
 ```text
-User-Agent: codex-tui/0.157.0 (Ubuntu 22.4.0; x86_64) xterm-256color
+User-Agent: codex-tui/0.157.1 (Ubuntu 22.4.0; x86_64) xterm-256color
 originator: codex-tui
-version: 0.157.0
+version: 0.157.1
 OpenAI-Beta: responses=experimental
 ```
 
